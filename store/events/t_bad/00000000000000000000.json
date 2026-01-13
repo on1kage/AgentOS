@@ -1,1 +1,0 @@
-{"body":{"action":"network_calls","reason":"deny:prohibited:morpheus:network_calls","role":"morpheus"},"prev_sha256":null,"seq":0,"sha256":"47940b03029e83a9a23cf5171fbeba762996d3bc201feb6203af2bc62c3a878b","task_id":"t_bad","ts_utc":"2026-01-13T01:18:28.708592Z","type":"TASK_REJECTED"}
