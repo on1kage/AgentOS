@@ -31,6 +31,14 @@ class AgentOSSubsystem:
         if self.capabilities is None:
             object.__setattr__(self, "capabilities", ["orchestration", "fsm_contract"])
 
+    def execute(self, context=None):
+        """Kernel entrypoint placeholder.
+
+        Must exist for Kernel Contract v1 compliance.
+        No execution is wired in AgentOS yet.
+        """
+        raise NotImplementedError("AgentOSSubsystem.execute is not wired yet")
+
     def describe(self) -> Dict[str, object]:
         """
         Return static metadata for kernel contract compliance.
