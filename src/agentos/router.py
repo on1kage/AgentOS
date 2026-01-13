@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
 
+from agentos.fsm import FSMViolationError, rebuild_task_state
 from agentos.policy import decide
 from agentos.store_fs import FSStore
 from agentos.task import Task, TaskState
@@ -23,7 +23,8 @@ class ExecutionRouter:
 
     Responsibilities:
     - Enforce policy before dispatch
-    - Emit TASK_DISPATCHED event
+    - Enforce task state via replay-only FSM (authoritative)
+    - Emit TASK_REJECTED or TASK_DISPATCHED event
     - Do NOT execute any code
     """
 
@@ -31,11 +32,33 @@ class ExecutionRouter:
         self.store = store
 
     def route(self, task: Task) -> RouteResult:
-        # Fail-closed: only VERIFIED tasks may be dispatched
-        if task.state is not TaskState.VERIFIED:
+        # Authoritative state is derived from append-only history (fail-closed).
+        try:
+            snap = rebuild_task_state(self.store, task.task_id)
+            derived_state = TaskState(str(snap["state"]))
+        except FSMViolationError as e:
+            # Fail-closed: surface deterministic violation hash as reason.
             return RouteResult(
                 ok=False,
-                reason=f"invalid_state:{task.state}",
+                reason=f"fsm_violation:{e.violation.violation_hash}",
+                task_id=task.task_id,
+                role=task.role,
+                action=task.action,
+            )
+        except Exception as e:
+            return RouteResult(
+                ok=False,
+                reason=f"state_rebuild_error:{type(e).__name__}",
+                task_id=task.task_id,
+                role=task.role,
+                action=task.action,
+            )
+
+        # Fail-closed: only VERIFIED tasks may be dispatched
+        if derived_state is not TaskState.VERIFIED:
+            return RouteResult(
+                ok=False,
+                reason=f"invalid_state:{derived_state.value}",
                 task_id=task.task_id,
                 role=task.role,
                 action=task.action,
