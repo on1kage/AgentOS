@@ -11,3 +11,4 @@ build/
 
 # AgentOS local evidence store
 store/
+__pycache__/
