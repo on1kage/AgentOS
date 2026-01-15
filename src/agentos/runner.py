@@ -184,3 +184,8 @@ class TaskRunner:
             stderr_sha256=stderr_sha,
             outputs_manifest_sha256=outputs_manifest_sha,
         )
+
+# Side-effect import: ensure capability patches are applied in production.
+# This must occur after TaskRunner is defined to avoid circular import hazards.
+import agentos.capabilities  # noqa: F401
+
