@@ -4,9 +4,11 @@ from agentos.canonical import sha256_hex
 
 # Patch strategy:
 # - Compute a stable idempotency key from the intended ExecutionSpec (derived from TASK_CREATED payload).
-# - If the key exists, fail immediately with a deterministic error (before any FSM/state inspection).
-# - Otherwise call the original runner unmodified.
-# - Record the key only after successful completion (orig_run_dispatched returns).
+# - If a completed record exists, fail immediately (before any FSM/state inspection).
+# - Acquire an atomic in-flight lock to prevent concurrent double-runs.
+# - Call the original runner unmodified.
+# - Record the key only after successful completion.
+# - Always release the in-flight lock (fail-closed).
 
 orig_run_dispatched = TaskRunner.run_dispatched
 
@@ -21,15 +23,23 @@ def run_dispatched_with_idempotency(self, task_id: str):
 
     key = sha256_hex(spec.to_canonical_json().encode("utf-8"))
 
-    # Idempotency MUST be checked before any FSM/state validation so duplicates do not
-    # surface as invalid_state errors after the first successful execution.
+    # Completed idempotency record check first: duplicates must not surface as invalid_state.
     if self._idempotency_store.check(task_id, key):
         raise RuntimeError(f"Duplicate execution prevented: {task_id} {key}")
 
-    res = orig_run_dispatched(self, task_id)
+    # Concurrency guard: prevent two runners from executing the same spec concurrently.
+    self._idempotency_store.acquire_lock(task_id, key)
 
-    # Record only after successful execution (no record on exception).
+    try:
+        res = orig_run_dispatched(self, task_id)
+    except Exception:
+        # No record on exception, but lock must be released so a policy-defined retry can occur.
+        self._idempotency_store.release_lock(task_id, key)
+        raise
+
+    # Record only after successful execution.
     self._idempotency_store.record(task_id, key, {"exec_id": spec.exec_id})
+    self._idempotency_store.release_lock(task_id, key)
     return res
 
 
