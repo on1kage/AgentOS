@@ -2,6 +2,7 @@ from agentos.runner import TaskRunner
 from agentos.task import Task, TaskState
 from agentos.store_fs import FSStore
 from agentos.canonical import sha256_hex
+from pathlib import Path
 import pytest
 
 # Side-effect import: monkey-patches TaskRunner.run_dispatched
@@ -55,6 +56,12 @@ def test_runner_idempotency(tmp_path):
     # First run should succeed
     summary1 = runner.run_dispatched(task_id)
     assert summary1.ok
+
+    # Evidence footprint must exist for the successful run (auditable, fail-closed)
+    ev_dir = Path(tmp_path) / "evidence" / task_id / payload["exec_id"]
+    assert (ev_dir / "exec_spec.json").is_file()
+    assert (ev_dir / "stdout.txt").is_file()
+    assert (ev_dir / "stderr.txt").is_file()
 
     # Second run should raise RuntimeError due to idempotency
     with pytest.raises(RuntimeError, match="Duplicate execution prevented"):
