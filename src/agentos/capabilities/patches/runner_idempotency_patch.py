@@ -2,13 +2,12 @@ from agentos.runner import TaskRunner
 from agentos.capabilities.idempotency import IdempotencyStore
 from agentos.canonical import sha256_hex
 
-# Patch strategy:
-# - Compute a stable idempotency key from the intended ExecutionSpec (derived from TASK_CREATED payload).
-# - If a completed record exists, fail immediately (before any FSM/state inspection).
-# - Acquire an atomic in-flight lock to prevent concurrent double-runs.
-# - Call the original runner unmodified.
-# - Record the key only after successful completion.
-# - Always release the in-flight lock (fail-closed).
+# Policy B: retry forbidden after any attempt.
+# - Acquire lock
+# - Atomically record "started" BEFORE execution
+# - If record exists -> block
+# - Run
+# - Release lock (record persists regardless of outcome)
 
 orig_run_dispatched = TaskRunner.run_dispatched
 
@@ -23,23 +22,25 @@ def run_dispatched_with_idempotency(self, task_id: str):
 
     key = sha256_hex(spec.to_canonical_json().encode("utf-8"))
 
-    # Completed idempotency record check first: duplicates must not surface as invalid_state.
-    if self._idempotency_store.check(task_id, key):
-        raise RuntimeError(f"Duplicate execution prevented: {task_id} {key}")
-
-    # Concurrency guard: prevent two runners from executing the same spec concurrently.
+    # Concurrency guard
     self._idempotency_store.acquire_lock(task_id, key)
+
+    # Attempt marker (authoritative for Policy B)
+    created = self._idempotency_store.record_if_absent(
+        task_id,
+        key,
+        {"status": "started", "exec_id": spec.exec_id},
+    )
+    if not created:
+        self._idempotency_store.release_lock(task_id, key)
+        raise RuntimeError(f"Duplicate execution prevented: {task_id} {key}")
 
     try:
         res = orig_run_dispatched(self, task_id)
-    except Exception:
-        # No record on exception, but lock must be released so a policy-defined retry can occur.
+    finally:
+        # Lock always released; record persists regardless of outcome
         self._idempotency_store.release_lock(task_id, key)
-        raise
 
-    # Record only after successful execution.
-    self._idempotency_store.record(task_id, key, {"exec_id": spec.exec_id})
-    self._idempotency_store.release_lock(task_id, key)
     return res
 
 

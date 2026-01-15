@@ -8,16 +8,15 @@ from typing import Dict
 
 class IdempotencyStore:
     """
-    Filesystem-backed idempotency with an atomic in-flight lock.
+    Filesystem-backed idempotency with an atomic in-flight lock and atomic attempt recording.
 
-    Invariants:
-    - A completed execution is represented by a record file:
-        store/idempotency/records/<task_id>_<exec_sha>.json
-    - A currently executing attempt holds an exclusive lock file:
-        store/idempotency/locks/<task_id>_<exec_sha>.lock
+    Layout:
+      root/records/<task_id>_<exec_sha>.json   # authoritative "attempt happened" marker
+      root/locks/<task_id>_<exec_sha>.lock     # in-flight mutex (prevents concurrent double-run)
 
-    Concurrency guarantee:
-    - lock acquisition uses O_CREAT|O_EXCL, so exactly one contender can acquire.
+    Policy modes:
+    - This store supports "record_if_absent" which is used to implement Policy B:
+        retry forbidden after any attempt (success or failure).
     """
 
     def __init__(self, root: str = "store/idempotency") -> None:
@@ -40,6 +39,10 @@ class IdempotencyStore:
         return self._record_path(task_id, exec_sha).exists()
 
     def acquire_lock(self, task_id: str, exec_sha: str) -> None:
+        """
+        Acquire an exclusive in-flight lock atomically.
+        Raises RuntimeError if the lock is already held.
+        """
         lp = self._lock_path(task_id, exec_sha)
         flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
         try:
@@ -55,11 +58,32 @@ class IdempotencyStore:
         except FileNotFoundError:
             pass
 
-    def record(self, task_id: str, exec_sha: str, metadata: Dict[str, str]) -> None:
+    def record_if_absent(self, task_id: str, exec_sha: str, metadata: Dict[str, str]) -> bool:
+        """
+        Atomically create the record file iff it does not already exist.
+        Returns True if created, False if already present.
+
+        This is the primitive required for Policy B (no retry after any attempt).
+        """
         path = self._record_path(task_id, exec_sha)
-        if path.exists():
+        flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+        try:
+            fd = os.open(str(path), flags, 0o600)
+        except FileExistsError:
+            return False
+
+        try:
+            data = json.dumps(metadata, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            os.write(fd, data)
+        finally:
+            os.close(fd)
+        return True
+
+    def record(self, task_id: str, exec_sha: str, metadata: Dict[str, str]) -> None:
+        """
+        Persist completed execution metadata. Fail-closed on overwrite.
+        (Legacy helper retained for existing tests/callers.)
+        """
+        created = self.record_if_absent(task_id, exec_sha, metadata)
+        if not created:
             raise RuntimeError(f"Idempotent key exists: {task_id} {exec_sha}")
-        path.write_text(
-            json.dumps(metadata, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
-            encoding="utf-8",
-        )
