@@ -6,6 +6,7 @@ from typing import Any, Dict, Mapping, Optional
 from agentos.canonical import sha256_hex
 from agentos.evidence import EvidenceBundle
 from agentos.execution import ExecutionSpec, canonical_inputs_manifest
+from agentos.outcome import ExecutionOutcome
 from agentos.executor import LocalExecutor
 from agentos.fsm import rebuild_task_state
 from agentos.run_events import RunEventWriter
@@ -132,15 +133,23 @@ class TaskRunner:
         )
 
     def run_dispatched(self, task_id: str) -> RunSummary:
-        snap = rebuild_task_state(self.store, task_id)
-        derived_state = TaskState(str(snap["state"]))
-        if derived_state is not TaskState.DISPATCHED:
-            raise RuntimeError(f"invalid_state:{derived_state.value}")
+        try:
+            snap = rebuild_task_state(self.store, task_id)
+            derived_state = TaskState(str(snap["state"]))
+            if derived_state is not TaskState.DISPATCHED:
+                self.evidence.write_rejection(task_id, reason=f"invalid_state:{derived_state.value}")
+                raise RuntimeError(f"invalid_state:{derived_state.value}")
 
-        created_payload = self._load_created_payload(task_id)
-        role, action = self._load_created_role_action(task_id)
+            created_payload = self._load_created_payload(task_id)
+            role, action = self._load_created_role_action(task_id)
 
-        spec = self._build_spec(task_id=task_id, role=role, action=action, payload=created_payload)
+            spec = self._build_spec(task_id=task_id, role=role, action=action, payload=created_payload)
+        except Exception as e:
+            # Preflight rejects must be auditable (fail-closed)
+            if isinstance(e, RuntimeError) and str(e).startswith("invalid_state:"):
+                raise
+            self.evidence.write_rejection(task_id, reason=f"preflight_error:{e.__class__.__name__}:{e}")
+            raise
 
         # Emit RUN_STARTED first (FSM enforces legality)
         self.events.emit_run_started(spec)
@@ -154,7 +163,7 @@ class TaskRunner:
         outputs_manifest_sha = canonical_inputs_manifest({})
 
         if res.exit_code == 0:
-            self.evidence.write_bundle(spec=spec, stdout=res.stdout, stderr=res.stderr, outputs={}, status="succeeded")
+            self.evidence.write_bundle(spec=spec, stdout=res.stdout, stderr=res.stderr, outputs={}, outcome=ExecutionOutcome.SUCCEEDED, reason="exit_code:0")
             self.events.emit_run_succeeded(
                 spec,
                 exit_code=res.exit_code,
@@ -172,7 +181,7 @@ class TaskRunner:
                 outputs_manifest_sha256=outputs_manifest_sha,
             )
 
-        self.evidence.write_bundle(spec=spec, stdout=res.stdout, stderr=res.stderr, outputs={}, status="failed")
+        self.evidence.write_bundle(spec=spec, stdout=res.stdout, stderr=res.stderr, outputs={}, outcome=ExecutionOutcome.FAILED, reason=f"exit_code:{res.exit_code}")
         err_sha = sha256_hex(f"exit_code:{res.exit_code}".encode("utf-8"))
         self.events.emit_run_failed(spec, error_class="nonzero_exit", error_sha256=err_sha, exit_code=res.exit_code)
         return RunSummary(

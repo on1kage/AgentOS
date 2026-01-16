@@ -32,6 +32,13 @@ def run_dispatched_with_idempotency(self, task_id: str):
         {"status": "started", "exec_id": spec.exec_id},
     )
     if not created:
+        # Persist auditable REJECTED evidence before raising
+        self.evidence.write_rejection(
+            task_id,
+            reason="duplicate_execution",
+            idempotency_key=key,
+            context={"exec_id": spec.exec_id},
+        )
         self._idempotency_store.release_lock(task_id, key)
         raise RuntimeError(f"Duplicate execution prevented: {task_id} {key}")
 

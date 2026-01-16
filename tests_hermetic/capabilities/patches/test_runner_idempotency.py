@@ -66,3 +66,9 @@ def test_runner_idempotency(tmp_path):
     # Second run should raise RuntimeError due to idempotency
     with pytest.raises(RuntimeError, match="Duplicate execution prevented"):
         runner.run_dispatched(task_id)
+
+    # Rejection must leave an auditable evidence footprint
+    rej_id = sha256_hex(b"duplicate_execution")[:16]
+    rej_dir = Path(tmp_path) / "evidence" / task_id / "rejections" / rej_id
+    assert (rej_dir / "rejection.json").is_file()
+    assert (rej_dir / "manifest.sha256.json").is_file()

@@ -1,9 +1,10 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any, Optional
 import json
 from agentos.canonical import canonical_json, sha256_hex
 from agentos.execution import ExecutionSpec
+from agentos.outcome import ExecutionOutcome, RUN_SUMMARY_SCHEMA_VERSION
 
 class EvidenceBundle:
     def __init__(self, root: str = "evidence") -> None:
@@ -14,7 +15,8 @@ class EvidenceBundle:
         stdout: bytes,
         stderr: bytes,
         outputs: Dict[str, bytes],
-        status: str,
+        outcome: ExecutionOutcome,
+        reason: str,
         idempotency_key: str | None = None
     ) -> Dict[str, str]:
         bundle_dir = self.root / spec.task_id / spec.exec_id
@@ -38,12 +40,57 @@ class EvidenceBundle:
         manifest_path = bundle_dir / "manifest.sha256.json"
         manifest_path.write_text(canonical_json({"files": manifest}), encoding="utf-8")
         summary = {
+            "schema_version": RUN_SUMMARY_SCHEMA_VERSION,
             "task_id": spec.task_id,
-            "idempotency_key": idempotency_key,
             "exec_id": spec.exec_id,
-            "status": status,
+            "outcome": str(outcome.value),
+            "reason": reason,
+            "idempotency_key": idempotency_key,
             "spec_sha256": spec.spec_sha256(),
             "manifest_sha256": sha256_hex(manifest_path.read_bytes()),
         }
         (bundle_dir / "run_summary.json").write_text(canonical_json(summary), encoding="utf-8")
+        return manifest
+
+
+    def write_rejection(
+        self,
+        task_id: str,
+        *,
+        reason: str,
+        idempotency_key: str | None = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, str]:
+        """
+        Persist an auditable REJECTED outcome when an ExecutionSpec cannot be built
+        (or when execution is blocked pre-run, e.g., idempotency).
+        """
+        if not isinstance(reason, str) or not reason:
+            raise TypeError("reason must be a non-empty string")
+        ctx = context if isinstance(context, dict) else {}
+
+        rej_id = sha256_hex(reason.encode("utf-8"))[:16]
+        bundle_dir = self.root / task_id / "rejections" / rej_id
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+
+        manifest: Dict[str, str] = {}
+
+        rejection = {
+            "schema_version": RUN_SUMMARY_SCHEMA_VERSION,
+            "task_id": task_id,
+            "exec_id": None,
+            "outcome": str(ExecutionOutcome.REJECTED.value),
+            "reason": reason,
+            "idempotency_key": idempotency_key,
+            "context": ctx,
+        }
+
+        rej_path = bundle_dir / "rejection.json"
+        rej_path.write_text(canonical_json(rejection), encoding="utf-8")
+        manifest["rejection.json"] = sha256_hex(rej_path.read_bytes())
+
+        manifest_path = bundle_dir / "manifest.sha256.json"
+        manifest_path.write_text(canonical_json({"files": manifest}), encoding="utf-8")
+        manifest["manifest.sha256.json"] = sha256_hex(manifest_path.read_bytes())
+
         return manifest
