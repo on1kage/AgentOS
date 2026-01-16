@@ -38,6 +38,23 @@ class IdempotencyStore:
     def check(self, task_id: str, exec_sha: str) -> bool:
         return self._record_path(task_id, exec_sha).exists()
 
+    def load_metadata(self, task_id: str, exec_sha: str) -> Dict[str, str]:
+        """Load immutable metadata for an existing idempotency record.
+
+        Fail-closed if the record does not exist or is not valid JSON.
+        """
+        rp = self._record_path(task_id, exec_sha)
+        if not rp.exists():
+            raise RuntimeError(f"missing idempotency record: {task_id} {exec_sha}")
+        obj = json.loads(rp.read_text(encoding="utf-8"))
+        if not isinstance(obj, dict):
+            raise TypeError("idempotency record must be a JSON object")
+        out: Dict[str, str] = {}
+        for k, v in obj.items():
+            if isinstance(k, str) and isinstance(v, str):
+                out[k] = v
+        return out
+
     def acquire_lock(self, task_id: str, exec_sha: str) -> None:
         """
         Acquire an exclusive in-flight lock atomically.
@@ -78,12 +95,3 @@ class IdempotencyStore:
         finally:
             os.close(fd)
         return True
-
-    def record(self, task_id: str, exec_sha: str, metadata: Dict[str, str]) -> None:
-        """
-        Persist completed execution metadata. Fail-closed on overwrite.
-        (Legacy helper retained for existing tests/callers.)
-        """
-        created = self.record_if_absent(task_id, exec_sha, metadata)
-        if not created:
-            raise RuntimeError(f"Idempotent key exists: {task_id} {exec_sha}")

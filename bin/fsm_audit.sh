@@ -15,6 +15,14 @@ export PYTHONPATH="$KERNEL_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 echo "[FSM-AUDIT] Using kernel at $KERNEL_DIR"
 echo "[FSM-AUDIT] Running persistent bootstrap (timeout)"
 
+# Hermetic audit: do not read developer ~/.config/onemind/subsystems.d
+TMP_HOME="$(mktemp -d)"
+trap 'rm -rf "$TMP_HOME"' EXIT
+mkdir -p "$TMP_HOME/.config/onemind/subsystems.d"
+export HOME="$TMP_HOME"
+export XDG_CONFIG_HOME="$TMP_HOME/.config"
+
+
 set +e
 OUTPUT=$(timeout 6s python3 -u "$KERNEL_DIR/bin/oneMind_persistent_bootstrap.py" 2>&1)
 RC=$?

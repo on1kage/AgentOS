@@ -1,6 +1,8 @@
 from agentos.runner import TaskRunner
 from agentos.capabilities.idempotency import IdempotencyStore
 from agentos.canonical import sha256_hex
+import json
+from pathlib import Path
 
 # Policy B: retry forbidden after any attempt.
 # - Acquire lock
@@ -32,11 +34,25 @@ def run_dispatched_with_idempotency(self, task_id: str):
         {"status": "started", "exec_id": spec.exec_id},
     )
     if not created:
-        # Persist auditable REJECTED evidence before raising
+        # Persist auditable REJECTED evidence and cryptographically link to prior immutable bundle
+        meta = self._idempotency_store.load_metadata(task_id, key)
+        prior_exec_id = meta.get("exec_id")
+        prior_manifest_sha256 = None
+        if prior_exec_id:
+            rs_path = Path(self.evidence.root) / task_id / prior_exec_id / "run_summary.json"
+            if rs_path.is_file():
+                obj = json.loads(rs_path.read_text(encoding="utf-8"))
+                if isinstance(obj, dict):
+                    v = obj.get("manifest_sha256")
+                    if isinstance(v, str) and v:
+                        prior_manifest_sha256 = v
+
         self.evidence.write_rejection(
             task_id,
             reason="duplicate_execution",
             idempotency_key=key,
+            prior_exec_id=prior_exec_id,
+            prior_manifest_sha256=prior_manifest_sha256,
             context={"exec_id": spec.exec_id},
         )
         self._idempotency_store.release_lock(task_id, key)

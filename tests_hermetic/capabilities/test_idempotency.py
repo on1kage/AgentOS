@@ -6,5 +6,5 @@ def test_idempotency_store(tmp_path):
     task_id = "task1"
     exec_sha = sha256_hex(b"dummy")
     assert not store.check(task_id, exec_sha)
-    store.record(task_id, exec_sha, {"note": "first"})
+    assert store.record_if_absent(task_id, exec_sha, {"note": "first"}) is True
     assert store.check(task_id, exec_sha)

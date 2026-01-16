@@ -144,17 +144,84 @@ class TaskRunner:
             role, action = self._load_created_role_action(task_id)
 
             spec = self._build_spec(task_id=task_id, role=role, action=action, payload=created_payload)
+
+
+            # Fail-closed: unsupported execution kinds are REJECTED pre-run (auditable)
+
+            if spec.kind != "shell":
+
+                raise RuntimeError(f"reject:unsupported_execution_kind:{spec.kind}")
         except Exception as e:
             # Preflight rejects must be auditable (fail-closed)
             if isinstance(e, RuntimeError) and str(e).startswith("invalid_state:"):
                 raise
+            if isinstance(e, RuntimeError) and str(e).startswith("reject:"):
+                reason = str(e)[len("reject:"):]
+                self.evidence.write_rejection(task_id, reason=reason)
+                raise RuntimeError(reason)
             self.evidence.write_rejection(task_id, reason=f"preflight_error:{e.__class__.__name__}:{e}")
             raise
 
         # Emit RUN_STARTED first (FSM enforces legality)
         self.events.emit_run_started(spec)
 
-        res = self.executor.run(spec)
+        try:
+
+            res = self.executor.run(spec)
+
+        except Exception as e:
+
+            # Fail-closed: any executor exception must persist FAILED evidence and RUN_FAILED.
+
+            reason = f"executor_exception:{e.__class__.__name__}:{e}"
+
+            self.evidence.write_bundle(
+
+                spec=spec,
+
+                stdout=b"",
+
+                stderr=b"",
+
+                outputs={},
+
+                outcome=ExecutionOutcome.FAILED,
+
+                reason=reason,
+
+            )
+
+            err_sha = sha256_hex(reason.encode("utf-8"))
+
+            self.events.emit_run_failed(
+
+                spec,
+
+                error_class="executor_exception",
+
+                error_sha256=err_sha,
+
+                exit_code=None,
+
+            )
+
+            return RunSummary(
+
+                ok=False,
+
+                task_id=task_id,
+
+                exec_id=spec.exec_id,
+
+                exit_code=125,
+
+                stdout_sha256=sha256_hex(b""),
+
+                stderr_sha256=sha256_hex(b""),
+
+                outputs_manifest_sha256=canonical_inputs_manifest({}),
+
+            )
 
         stdout_sha = sha256_hex(res.stdout)
         stderr_sha = sha256_hex(res.stderr)

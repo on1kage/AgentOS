@@ -1,26 +1,51 @@
 name: FSM Audit
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
+
 jobs:
   audit:
     runs-on: ubuntu-22.04
+
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.10"
+          cache: "pip"
+
       - name: Install test dependencies
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install pytest
+
+      - name: Compile src (fail-closed)
+        run: |
+          set -euo pipefail
+          python -m compileall -q src
+
       - name: Run hermetic tests (fail-closed)
         env:
           PYTHONPATH: src
-        run: pytest -q --disable-warnings tests_hermetic
-      - name: Run FSM audit
-        run: bin/fsm_audit.sh
+        run: |
+          set -euo pipefail
+          python -m pytest -q --disable-warnings --maxfail=1 tests_hermetic
+
+      - name: Run FSM audit (fail-closed)
+        run: |
+          set -euo pipefail
+          bash -euo pipefail bin/fsm_audit.sh

@@ -20,7 +20,7 @@ class EvidenceBundle:
         idempotency_key: str | None = None
     ) -> Dict[str, str]:
         bundle_dir = self.root / spec.task_id / spec.exec_id
-        bundle_dir.mkdir(parents=True, exist_ok=True)
+        bundle_dir.mkdir(parents=True, exist_ok=False)
         manifest: Dict[str, str] = {}
         exec_spec_path = bundle_dir / "exec_spec.json"
         exec_spec_path.write_text(spec.to_canonical_json(), encoding="utf-8")
@@ -59,6 +59,8 @@ class EvidenceBundle:
         *,
         reason: str,
         idempotency_key: str | None = None,
+        prior_exec_id: str | None = None,
+        prior_manifest_sha256: str | None = None,
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """
@@ -71,7 +73,7 @@ class EvidenceBundle:
 
         rej_id = sha256_hex(reason.encode("utf-8"))[:16]
         bundle_dir = self.root / task_id / "rejections" / rej_id
-        bundle_dir.mkdir(parents=True, exist_ok=True)
+        bundle_dir.mkdir(parents=True, exist_ok=False)
 
         manifest: Dict[str, str] = {}
 
@@ -82,6 +84,8 @@ class EvidenceBundle:
             "outcome": str(ExecutionOutcome.REJECTED.value),
             "reason": reason,
             "idempotency_key": idempotency_key,
+            "prior_exec_id": prior_exec_id,
+            "prior_manifest_sha256": prior_manifest_sha256,
             "context": ctx,
         }
 
