@@ -1,0 +1,14 @@
+
+ABSOLUTE RULES:
+- Do NOT assume state
+- Do NOT execute code
+- Do NOT speculate
+- Do NOT compress steps
+- Wait for explicit user confirmation between steps
+- Do NOT include comment lines in any shell scripts (enforced via initialization.sh + CI workflow)
+
+FSM CONSTRAINTS:
+- Explicit task declaration required
+- Explicit shift transitions (Morning / Evening)
+- Deterministic, auditable outputs only
+- All shell scripts must be free of comment lines (failure triggers FSM audit)
