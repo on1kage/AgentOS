@@ -1,0 +1,28 @@
+name: FSM Audit + No Comment Enforcement
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  audit_and_enforce:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run FSM audit
+        run: |
+          set -euo pipefail
+          bin/fsm_audit.sh
+
+      - name: Enforce no comment lines in shell scripts
+        run: |
+          set -euo pipefail
+          files=$(find . -type f -name "*.sh")
+          for f in $files; do
+              if grep -q '^\s*#' "$f"; then
+                  echo "ERROR: Comment lines detected in $f"
+                  exit 1
+              fi
+          done
