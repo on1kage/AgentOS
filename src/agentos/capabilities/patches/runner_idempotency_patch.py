@@ -59,8 +59,15 @@ def run_dispatched_with_idempotency(self, task_id: str):
         raise RuntimeError(f"Duplicate execution prevented: {task_id} {key}")
 
     try:
+        # Thread idempotency key into evidence bundles written by TaskRunner
+        self._current_idempotency_key = key
         res = orig_run_dispatched(self, task_id)
     finally:
+        # Clear per-run thread-local style state to avoid leakage across tasks
+        try:
+            delattr(self, "_current_idempotency_key")
+        except Exception:
+            pass
         # Lock always released; record persists regardless of outcome
         self._idempotency_store.release_lock(task_id, key)
 

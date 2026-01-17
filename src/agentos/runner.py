@@ -144,6 +144,7 @@ class TaskRunner:
             role, action = self._load_created_role_action(task_id)
 
             spec = self._build_spec(task_id=task_id, role=role, action=action, payload=created_payload)
+            idem_key = getattr(self, "_current_idempotency_key", None)
 
 
             # Fail-closed: unsupported execution kinds are REJECTED pre-run (auditable)
@@ -157,9 +158,9 @@ class TaskRunner:
                 raise
             if isinstance(e, RuntimeError) and str(e).startswith("reject:"):
                 reason = str(e)[len("reject:"):]
-                self.evidence.write_rejection(task_id, reason=reason)
+                self.evidence.write_rejection(task_id, reason=reason, idempotency_key=idem_key)
                 raise RuntimeError(reason)
-            self.evidence.write_rejection(task_id, reason=f"preflight_error:{e.__class__.__name__}:{e}")
+            self.evidence.write_rejection(task_id, reason=f"preflight_error:{e.__class__.__name__}:{e}", idempotency_key=idem_key)
             raise
 
         # Emit RUN_STARTED first (FSM enforces legality)
@@ -188,6 +189,8 @@ class TaskRunner:
                 outcome=ExecutionOutcome.FAILED,
 
                 reason=reason,
+
+                idempotency_key=idem_key,
 
             )
 
@@ -230,7 +233,7 @@ class TaskRunner:
         outputs_manifest_sha = canonical_inputs_manifest({})
 
         if res.exit_code == 0:
-            self.evidence.write_bundle(spec=spec, stdout=res.stdout, stderr=res.stderr, outputs={}, outcome=ExecutionOutcome.SUCCEEDED, reason="exit_code:0")
+            self.evidence.write_bundle(spec=spec, stdout=res.stdout, stderr=res.stderr, outputs={}, outcome=ExecutionOutcome.SUCCEEDED, reason="exit_code:0", idempotency_key=idem_key)
             self.events.emit_run_succeeded(
                 spec,
                 exit_code=res.exit_code,
@@ -248,7 +251,7 @@ class TaskRunner:
                 outputs_manifest_sha256=outputs_manifest_sha,
             )
 
-        self.evidence.write_bundle(spec=spec, stdout=res.stdout, stderr=res.stderr, outputs={}, outcome=ExecutionOutcome.FAILED, reason=f"exit_code:{res.exit_code}")
+        self.evidence.write_bundle(spec=spec, stdout=res.stdout, stderr=res.stderr, outputs={}, outcome=ExecutionOutcome.FAILED, reason=f"exit_code:{res.exit_code}", idempotency_key=idem_key)
         err_sha = sha256_hex(f"exit_code:{res.exit_code}".encode("utf-8"))
         self.events.emit_run_failed(spec, error_class="nonzero_exit", error_sha256=err_sha, exit_code=res.exit_code)
         return RunSummary(
