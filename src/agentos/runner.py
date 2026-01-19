@@ -24,6 +24,8 @@ class RunSummary:
     stdout_sha256: str
     stderr_sha256: str
     outputs_manifest_sha256: str
+    evidence_bundle_dir: str
+    evidence_manifest_sha256: str
 
     def to_obj(self) -> Dict[str, Any]:
         return {
@@ -34,6 +36,8 @@ class RunSummary:
             "stdout_sha256": self.stdout_sha256,
             "stderr_sha256": self.stderr_sha256,
             "outputs_manifest_sha256": self.outputs_manifest_sha256,
+            "evidence_bundle_dir": self.evidence_bundle_dir,
+            "evidence_manifest_sha256": self.evidence_manifest_sha256,
         }
 
 
@@ -167,73 +171,56 @@ class TaskRunner:
         self.events.emit_run_started(spec)
 
         try:
-
             res = self.executor.run(spec)
 
         except Exception as e:
-
-            # Fail-closed: any executor exception must persist FAILED evidence and RUN_FAILED.
-
             reason = f"executor_exception:{e.__class__.__name__}:{e}"
-
-            self.evidence.write_bundle(
-
+            receipt_exc = self.evidence.write_bundle(
                 spec=spec,
-
                 stdout=b"",
-
                 stderr=b"",
-
                 outputs={},
-
                 outcome=ExecutionOutcome.FAILED,
-
                 reason=reason,
-
                 idempotency_key=idem_key,
-
             )
 
             err_sha = sha256_hex(reason.encode("utf-8"))
-
             self.events.emit_run_failed(
-
                 spec,
-
                 error_class="executor_exception",
-
                 error_sha256=err_sha,
-
                 exit_code=None,
-
             )
 
             return RunSummary(
-
                 ok=False,
-
                 task_id=task_id,
-
                 exec_id=spec.exec_id,
-
                 exit_code=125,
-
                 stdout_sha256=sha256_hex(b""),
-
                 stderr_sha256=sha256_hex(b""),
-
                 outputs_manifest_sha256=canonical_inputs_manifest({}),
-
+                evidence_bundle_dir=str(receipt_exc.get("bundle_dir")),
+                evidence_manifest_sha256=str(receipt_exc.get("manifest_sha256")),
             )
 
         stdout_sha = sha256_hex(res.stdout)
         stderr_sha = sha256_hex(res.stderr)
 
-        # Step 7+ will bind declared outputs. For now, empty manifest.
         outputs_manifest_sha = canonical_inputs_manifest({})
 
         if res.exit_code == 0:
-            self.evidence.write_bundle(spec=spec, stdout=res.stdout, stderr=res.stderr, outputs={}, outcome=ExecutionOutcome.SUCCEEDED, reason="exit_code:0", idempotency_key=idem_key)
+            receipt = self.evidence.write_bundle(
+                spec=spec,
+                stdout=res.stdout,
+                stderr=res.stderr,
+                outputs={},
+                outcome=ExecutionOutcome.SUCCEEDED,
+                reason="exit_code:0",
+                idempotency_key=idem_key,
+            )
+
             self.events.emit_run_succeeded(
                 spec,
                 exit_code=res.exit_code,
@@ -241,6 +228,7 @@ class TaskRunner:
                 stderr_sha256=stderr_sha,
                 outputs_manifest_sha256=outputs_manifest_sha,
             )
+
             return RunSummary(
                 ok=True,
                 task_id=task_id,
@@ -249,11 +237,28 @@ class TaskRunner:
                 stdout_sha256=stdout_sha,
                 stderr_sha256=stderr_sha,
                 outputs_manifest_sha256=outputs_manifest_sha,
+                evidence_bundle_dir=str(receipt.get("bundle_dir")),
+                evidence_manifest_sha256=str(receipt.get("manifest_sha256")),
             )
 
-        self.evidence.write_bundle(spec=spec, stdout=res.stdout, stderr=res.stderr, outputs={}, outcome=ExecutionOutcome.FAILED, reason=f"exit_code:{res.exit_code}", idempotency_key=idem_key)
+        receipt = self.evidence.write_bundle(
+            spec=spec,
+            stdout=res.stdout,
+            stderr=res.stderr,
+            outputs={},
+            outcome=ExecutionOutcome.FAILED,
+            reason=f"exit_code:{res.exit_code}",
+            idempotency_key=idem_key,
+        )
+
         err_sha = sha256_hex(f"exit_code:{res.exit_code}".encode("utf-8"))
-        self.events.emit_run_failed(spec, error_class="nonzero_exit", error_sha256=err_sha, exit_code=res.exit_code)
+        self.events.emit_run_failed(
+            spec,
+            error_class="nonzero_exit",
+            error_sha256=err_sha,
+            exit_code=res.exit_code,
+        )
+
         return RunSummary(
             ok=False,
             task_id=task_id,
@@ -262,9 +267,12 @@ class TaskRunner:
             stdout_sha256=stdout_sha,
             stderr_sha256=stderr_sha,
             outputs_manifest_sha256=outputs_manifest_sha,
+            evidence_bundle_dir=str(receipt.get("bundle_dir")),
+            evidence_manifest_sha256=str(receipt.get("manifest_sha256")),
         )
 
 # Side-effect import: ensure capability patches are applied in production.
 # This must occur after TaskRunner is defined to avoid circular import hazards.
-import agentos.capabilities  # noqa: F401
+import agentos.capabilities
+  # noqa: F401
 

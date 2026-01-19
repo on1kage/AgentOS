@@ -18,7 +18,7 @@ class EvidenceBundle:
         outcome: ExecutionOutcome,
         reason: str,
         idempotency_key: str | None = None
-    ) -> Dict[str, str]:
+    ) -> Dict[str, Any]:
         bundle_dir = self.root / spec.task_id / spec.exec_id
         bundle_dir.mkdir(parents=True, exist_ok=False)
         manifest: Dict[str, str] = {}
@@ -50,7 +50,12 @@ class EvidenceBundle:
             "manifest_sha256": sha256_hex(manifest_path.read_bytes()),
         }
         (bundle_dir / "run_summary.json").write_text(canonical_json(summary), encoding="utf-8")
-        return manifest
+        return {
+            "files": manifest,
+            "bundle_dir": str(bundle_dir),
+            "spec_sha256": summary["spec_sha256"],
+            "manifest_sha256": summary["manifest_sha256"],
+        }
 
 
     def write_rejection(
@@ -62,7 +67,7 @@ class EvidenceBundle:
         prior_exec_id: str | None = None,
         prior_manifest_sha256: str | None = None,
         context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, str]:
+    ) -> Dict[str, Any]:
         """
         Persist an auditable REJECTED outcome when an ExecutionSpec cannot be built
         (or when execution is blocked pre-run, e.g., idempotency).
@@ -95,6 +100,12 @@ class EvidenceBundle:
 
         manifest_path = bundle_dir / "manifest.sha256.json"
         manifest_path.write_text(canonical_json({"files": manifest}), encoding="utf-8")
-        manifest["manifest.sha256.json"] = sha256_hex(manifest_path.read_bytes())
+        manifest_sha = sha256_hex(manifest_path.read_bytes())
+        manifest["manifest.sha256.json"] = manifest_sha
 
-        return manifest
+        return {
+            "files": manifest,
+            "bundle_dir": str(bundle_dir),
+            "rejection_id": rej_id,
+            "manifest_sha256": manifest_sha,
+        }
