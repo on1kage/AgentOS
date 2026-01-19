@@ -4,13 +4,7 @@ from agentos.canonical import sha256_hex
 import json
 from pathlib import Path
 
-# Policy B: retry forbidden after any attempt.
-# - Acquire lock
-# - Atomically record "started" BEFORE execution
-# - If record exists -> block
-# - Run
-# - Release lock (record persists regardless of outcome)
-
+# Original TaskRunner execution function
 orig_run_dispatched = TaskRunner.run_dispatched
 
 
@@ -27,25 +21,22 @@ def run_dispatched_with_idempotency(self, task_id: str):
     # Concurrency guard
     self._idempotency_store.acquire_lock(task_id, key)
 
-    # Attempt marker (authoritative for Policy B)
+    # Attempt marker (Policy B)
     created = self._idempotency_store.record_if_absent(
         task_id,
         key,
         {"status": "started", "exec_id": spec.exec_id},
     )
     if not created:
-        # Persist auditable REJECTED evidence and cryptographically link to prior immutable bundle
+        # Persist auditable REJECTED evidence
         meta = self._idempotency_store.load_metadata(task_id, key)
-        prior_exec_id = meta.get("exec_id")
+        prior_exec_id = meta.get("exec_id") if meta else None
         prior_manifest_sha256 = None
         if prior_exec_id:
             rs_path = Path(self.evidence.root) / task_id / prior_exec_id / "run_summary.json"
             if rs_path.is_file():
                 obj = json.loads(rs_path.read_text(encoding="utf-8"))
-                if isinstance(obj, dict):
-                    v = obj.get("manifest_sha256")
-                    if isinstance(v, str) and v:
-                        prior_manifest_sha256 = v
+                prior_manifest_sha256 = obj.get("manifest_sha256") if isinstance(obj, dict) else None
 
         self.evidence.write_rejection(
             task_id,
@@ -58,20 +49,32 @@ def run_dispatched_with_idempotency(self, task_id: str):
         self._idempotency_store.release_lock(task_id, key)
         raise RuntimeError(f"Duplicate execution prevented: {task_id} {key}")
 
+    # ---- SINGLE clean try/except/finally ----
     try:
-        # Thread idempotency key into evidence bundles written by TaskRunner
+        # Thread idempotency key into evidence bundles
         self._current_idempotency_key = key
         res = orig_run_dispatched(self, task_id)
+    except RuntimeError as e:
+        if str(e).startswith("unsupported_execution_kind:"):
+            self.evidence.write_rejection(
+                task_id,
+                reason=str(e),
+                idempotency_key=getattr(self, "_current_idempotency_key", None),
+                prior_exec_id=None,
+                prior_manifest_sha256=None,
+                context={"exec_id": getattr(self, "_current_idempotency_key", None)},
+            )
+        raise
     finally:
-        # Clear per-run thread-local style state to avoid leakage across tasks
+        # Clear per-run key and release lock
         try:
             delattr(self, "_current_idempotency_key")
         except Exception:
             pass
-        # Lock always released; record persists regardless of outcome
         self._idempotency_store.release_lock(task_id, key)
 
     return res
 
 
+# Patch TaskRunner
 TaskRunner.run_dispatched = run_dispatched_with_idempotency

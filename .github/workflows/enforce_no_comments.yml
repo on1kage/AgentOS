@@ -1,0 +1,20 @@
+name: Enforce No Comments in Shell Scripts
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  enforce-comments:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Verify no comment lines in shell scripts
+        run: |
+          set -euo pipefail
+          files=$(find . -type f -name "*.sh")
+          for f in $files; do
+            if grep -q '^\s*#' "$f"; then
+              echo "[ENFORCEMENT] ERROR: Comment lines detected in $f"
+              exit 1
+            fi
+          done
