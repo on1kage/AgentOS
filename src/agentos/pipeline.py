@@ -78,7 +78,7 @@ def verify_plan(steps: List[Step]) -> PipelineResult:
         if not d.allow:
             ok = False
 
-    return PipelineResult(ok=ok, decisions=decisions)
+    bundle = EvidenceBundle().write_verification_bundle(spec_sha256=sha256_hex(canonical_json([s.__dict__ for s in steps]).encode("utf-8")), decisions={i: {"role": s.role, "action": s.action, "allow": d.allow, "reason": d.reason} for i,s in enumerate(steps)}, reason="plan_verification"); return PipelineResult(ok=ok, decisions=decisions, verification_bundle_dir=bundle["bundle_dir"], verification_manifest_sha256=bundle["manifest_sha256"])
 
 
 def verify_task(store: FSStore, task: Task) -> TaskVerifyResult:
