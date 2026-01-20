@@ -90,6 +90,19 @@ class TaskRunner:
                 return role, action
         raise RuntimeError("missing TASK_CREATED event")
 
+    def _load_verified_inputs_manifest_sha256(self, task_id: str) -> str:
+        evs = list(self.store.list_events(task_id))
+        for ev in evs:
+            if str(ev.get("type")) == "TASK_VERIFIED":
+                body = ev.get("body")
+                if not isinstance(body, dict):
+                    raise TypeError("TASK_VERIFIED body must be an object")
+                ims = body.get("inputs_manifest_sha256")
+                if not isinstance(ims, str) or not ims:
+                    raise TypeError("TASK_VERIFIED body.inputs_manifest_sha256 must be a non-empty string")
+                return ims
+        raise RuntimeError("missing TASK_VERIFIED event")
+
     def _require_str(self, obj: Mapping[str, Any], k: str) -> str:
         v = obj.get(k)
         if not isinstance(v, str) or not v:
@@ -138,6 +151,7 @@ class TaskRunner:
 
     def run_dispatched(self, task_id: str) -> RunSummary:
         try:
+            idem_key = getattr(self, '_current_idempotency_key', None)
             snap = rebuild_task_state(self.store, task_id)
             derived_state = TaskState(str(snap["state"]))
             if derived_state is not TaskState.DISPATCHED:
@@ -147,8 +161,11 @@ class TaskRunner:
             created_payload = self._load_created_payload(task_id)
             role, action = self._load_created_role_action(task_id)
 
+            verified_ims = self._load_verified_inputs_manifest_sha256(task_id)
+            created_payload = dict(created_payload)
+            created_payload['inputs_manifest_sha256'] = verified_ims
+
             spec = self._build_spec(task_id=task_id, role=role, action=action, payload=created_payload)
-            idem_key = getattr(self, "_current_idempotency_key", None)
 
 
             # Fail-closed: unsupported execution kinds are REJECTED pre-run (auditable)

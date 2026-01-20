@@ -120,6 +120,8 @@ def verify_task(store: FSStore, task: Task) -> TaskVerifyResult:
                 'role': task.role,
                 'action': task.action,
                 'reason': bad_reason,
+            'inputs_manifest_sha256': ims,
+                'inputs_manifest_sha256': fail_spec,
                 'attempt': task.attempt,
             },
         )
@@ -148,6 +150,7 @@ def verify_task(store: FSStore, task: Task) -> TaskVerifyResult:
                 'role': task.role,
                 'action': task.action,
                 'reason': d.reason,
+                'inputs_manifest_sha256': ims,
                 'attempt': task.attempt,
             },
         )
