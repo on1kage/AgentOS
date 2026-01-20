@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Any, Optional
-import json
+import re
 from agentos.canonical import canonical_json, sha256_hex
 from agentos.execution import ExecutionSpec
 from agentos.outcome import ExecutionOutcome, RUN_SUMMARY_SCHEMA_VERSION
@@ -57,6 +57,49 @@ class EvidenceBundle:
             "manifest_sha256": summary["manifest_sha256"],
         }
 
+    def write_verification_bundle(
+        self,
+        *,
+        spec_sha256: str,
+        decisions: dict,
+        reason: str,
+        idempotency_key: str | None = None,
+    ) -> dict[str, str]:
+        if not isinstance(spec_sha256, str) or not spec_sha256:
+            raise TypeError("spec_sha256 must be a non-empty string")
+        if not re.fullmatch(r"[0-9a-f]{64}", spec_sha256):
+            raise ValueError("spec_sha256 must be 64 lowercase hex chars (sha256)")
+        if not isinstance(decisions, dict):
+            raise TypeError("decisions must be a dict")
+        if not isinstance(reason, str) or not reason:
+            raise TypeError("reason must be a non-empty string")
+
+        bundle_dir = self.root / "verify" / spec_sha256
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+
+        payload = {
+            "spec_sha256": spec_sha256,
+            "reason": reason,
+            "idempotency_key": idempotency_key,
+            "decisions": decisions,
+        }
+
+        manifest_path = bundle_dir / "manifest.sha256.json"
+        new_bytes = canonical_json(payload).encode("utf-8")
+        new_sha = sha256_hex(new_bytes)
+
+        if manifest_path.exists():
+            old_bytes = manifest_path.read_bytes()
+            old_sha = sha256_hex(old_bytes)
+            if old_sha != new_sha:
+                raise RuntimeError("verification bundle collision: existing manifest differs")
+        else:
+            manifest_path.write_bytes(new_bytes)
+
+        return {
+            "bundle_dir": str(bundle_dir),
+            "manifest_sha256": new_sha,
+        }
 
     def write_rejection(
         self,
