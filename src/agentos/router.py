@@ -1,3 +1,28 @@
+"""
+ExecutionRouter module
+
+Deterministic dispatch of tasks with full verification.
+
+Each RouteResult returned includes:
+ - ok: whether task dispatch is authorized
+ - reason: denial or success reason
+ - task_id, role, action
+ - inputs_manifest_sha256: verified manifest from TASK_VERIFIED
+ - verification_bundle_dir: path to the verification bundle
+ - verification_manifest_sha256: SHA256 of the verification bundle manifest
+
+Fail-closed: only VERIFIED tasks may be dispatched.
+All RouteResults are anchored to append-only FSStore events.
+
+Usage example:
+  from agentos.runner import TaskRunner
+  from agentos.store_fs import FSStore
+  store = FSStore('/tmp/store')
+  runner = TaskRunner(store)
+  route_result = runner.route(task)
+  print(route_result.ok, route_result.inputs_manifest_sha256)
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
