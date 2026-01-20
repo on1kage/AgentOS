@@ -33,7 +33,7 @@ def test_runner_idempotency_concurrent(tmp_path):
     t = Task(
         task_id=task_id,
         state=TaskState.CREATED,
-        role="recon",
+        role="envoy",
         action="deterministic_local_execution",
         payload=payload,
         attempt=0,

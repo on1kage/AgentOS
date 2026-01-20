@@ -33,7 +33,7 @@ def test_timeout_emits_failed_evidence_and_retry_is_rejected_with_linkage(tmp_pa
     t = Task(
         task_id=task_id,
         state=TaskState.CREATED,
-        role="recon",
+        role="envoy",
         action="deterministic_local_execution",
         payload=payload,
         attempt=0,

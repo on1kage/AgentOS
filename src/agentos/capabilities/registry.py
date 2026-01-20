@@ -13,7 +13,7 @@ class CapabilitySpec:
 def registry() -> Dict[str, CapabilitySpec]:
     return {
         "recon:deterministic_local_execution": CapabilitySpec(
-            role="recon",
+            role="envoy",
             action="deterministic_local_execution",
             payload_schema={
                 "exec_id": str,

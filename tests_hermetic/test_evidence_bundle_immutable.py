@@ -11,7 +11,7 @@ def test_evidence_bundle_single_shot_dir(tmp_path):
     spec = ExecutionSpec(
         exec_id="exec_immutable_0001",
         task_id="task_immutable",
-        role="recon",
+        role="envoy",
         action="deterministic_local_execution",
         kind="shell",
         cmd_argv=["/bin/echo", "ok"],
