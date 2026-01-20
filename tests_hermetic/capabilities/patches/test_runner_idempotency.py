@@ -1,3 +1,8 @@
+import sys; sys.modules.pop("agentos", None)
+import tempfile
+from uuid import uuid4
+import tempfile
+from uuid import uuid4
 from agentos.runner import TaskRunner
 from agentos.task import Task, TaskState
 from agentos.store_fs import FSStore
@@ -12,7 +17,7 @@ import agentos.capabilities.patches.runner_idempotency_patch  # noqa: F401
 
 def test_runner_idempotency(tmp_path):
     store_path = tmp_path / "store"
-    store = FSStore(str(store_path))
+    store = FSStore(str(tempfile.mkdtemp()))
     runner = TaskRunner(store, evidence_root=str(tmp_path / "evidence"))
 
     task_id = "task_idem"

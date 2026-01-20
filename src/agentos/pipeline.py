@@ -135,9 +135,11 @@ def verify_task(store: FSStore, task: Task) -> TaskVerifyResult:
             verification_manifest_sha256=bundle['manifest_sha256'],
         )
 
+    verify_spec = sha256_hex(canonical_json({'inputs_manifest_sha256': ims, 'role': task.role, 'action': task.action}).encode('utf-8'))
+
     bundle = EvidenceBundle().write_verification_bundle(
-        spec_sha256=ims,
-        decisions={'role': task.role, 'action': task.action, 'allow': d.allow, 'reason': d.reason},
+        spec_sha256=verify_spec,
+        decisions={'role': task.role, 'action': task.action, 'allow': d.allow, 'reason': d.reason, 'inputs_manifest_sha256': ims},
         reason='task_verification',
         idempotency_key=None,
     )

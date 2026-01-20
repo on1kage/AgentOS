@@ -23,7 +23,7 @@ def test_runner_fails_closed_when_not_dispatched(tmp_path):
         task_id,
         "TASK_CREATED",
         {
-            "role": "recon",
+            "role": "envoy",
             "action": "deterministic_local_execution",
             "payload": payload,
             "attempt": 0,

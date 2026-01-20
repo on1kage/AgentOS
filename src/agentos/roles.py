@@ -33,8 +33,8 @@ def roles() -> Dict[str, Role]:
             authority=["external_research", "source_collection"],
             prohibited=["local_execution", "state_mutation", "unauthorized_actions"],
         ),
-        "recon": Role(
-            name="recon",
+        "envoy": Role(
+            name="envoy",
             authority=["deterministic_local_execution", "evidence_capture"],
             prohibited=["internet_access", "unauthorized_actions", "capability_claims_without_proof"],
         ),
