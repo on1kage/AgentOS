@@ -26,6 +26,7 @@ class RunEventWriter:
             {
                 "exec_id": spec.exec_id,
                 "spec_sha256": spec.spec_sha256(),
+                "inputs_manifest_sha256": spec.inputs_manifest_sha256,
                 "kind": spec.kind,
             },
         )
