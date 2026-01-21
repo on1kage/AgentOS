@@ -10,12 +10,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install package + test deps
+        run: |
+          set -euo pipefail
+          python -m pip install -U pip
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
+          python -m pip install -e .
       - name: Run FSM audit
         run: |
           set -euo pipefail
           bin/fsm_audit.sh
-
       - name: Enforce no comment lines in shell scripts
         run: |
           set -euo pipefail
@@ -26,3 +35,55 @@ jobs:
                   exit 1
               fi
           done
+      - name: Run hermetic tests
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src pytest -q --disable-warnings tests_hermetic
+      - name: Seed evidence bundle for CI validator
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python3 - <<'PY'
+from pathlib import Path
+from agentos.evidence import EvidenceBundle
+from agentos.execution import ExecutionSpec
+from agentos.outcome import ExecutionOutcome
+
+root = Path("/tmp/agentos_evidence_ci")
+if root.exists():
+    for p in sorted(root.rglob("*"), reverse=True):
+        if p.is_file() or p.is_symlink():
+            p.unlink()
+        elif p.is_dir():
+            p.rmdir()
+root.mkdir(parents=True, exist_ok=True)
+
+ev = EvidenceBundle(str(root))
+spec = ExecutionSpec(
+    exec_id="exec_ci_0001",
+    task_id="task_ci",
+    role="envoy",
+    action="deterministic_local_execution",
+    kind="shell",
+    cmd_argv=["/bin/echo","ok"],
+    cwd="/tmp",
+    env_allowlist=[],
+    timeout_s=1,
+    inputs_manifest_sha256="00"*32,
+    paths_allowlist=["/tmp","/bin/echo"],
+    note="ci validator seed",
+)
+ev.write_bundle(
+    spec=spec,
+    stdout=b"ok\n",
+    stderr=b"",
+    outputs={},
+    outcome=ExecutionOutcome.SUCCEEDED,
+    reason="exit_code:0",
+    idempotency_key="k",
+)
+print("seeded", str(root))
+PY
+      - name: Validate evidence contract
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python3 tools/validate_evidence.py --evidence-root /tmp/agentos_evidence_ci
