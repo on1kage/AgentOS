@@ -14,7 +14,7 @@ def test_verify_task_emits_created_and_verified():
             state=TaskState.CREATED,
             role="morpheus",
             action="architecture",
-            payload={},
+            payload={"inputs_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
             attempt=0,
         )
 
@@ -38,7 +38,7 @@ def test_verify_task_idempotent_created_event():
             state=TaskState.CREATED,
             role="morpheus",
             action="architecture",
-            payload={},
+            payload={"inputs_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
             attempt=0,
         )
 
