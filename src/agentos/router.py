@@ -109,6 +109,10 @@ class ExecutionRouter:
             )
 
         # Authorized: emit dispatch event
+        # Load verified inputs manifest for audit continuity
+        from agentos.runner import TaskRunner
+        verified_ims = TaskRunner(self.store)._load_verified_inputs_manifest_sha256(task.task_id)
+
         self.store.append_event(
             task.task_id,
             "TASK_DISPATCHED",
@@ -116,6 +120,7 @@ class ExecutionRouter:
                 "role": task.role,
                 "action": task.action,
                 "attempt": task.attempt,
+                "inputs_manifest_sha256": verified_ims,
             },
         )
 
