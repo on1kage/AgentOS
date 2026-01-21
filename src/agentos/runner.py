@@ -59,7 +59,14 @@ class TaskRunner:
         self.store = store
         self.executor = LocalExecutor()
         self.events = RunEventWriter(store)
-        self.evidence = EvidenceBundle(evidence_root)
+        er = evidence_root
+        try:
+            from pathlib import Path as _P
+            if not _P(er).is_absolute() and hasattr(store, "root"):
+                er = str(_P(str(getattr(store, "root"))) / er)
+        except Exception:
+            pass
+        self.evidence = EvidenceBundle(er)
 
     def _load_created_payload(self, task_id: str) -> Dict[str, Any]:
         evs = list(self.store.list_events(task_id))
