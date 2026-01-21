@@ -47,6 +47,7 @@ class EvidenceBundle:
             "reason": reason,
             "idempotency_key": idempotency_key,
             "spec_sha256": spec.spec_sha256(),
+            "inputs_manifest_sha256": spec.inputs_manifest_sha256,
             "manifest_sha256": sha256_hex(manifest_path.read_bytes()),
         }
         (bundle_dir / "run_summary.json").write_text(canonical_json(summary), encoding="utf-8")
