@@ -21,6 +21,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Checkout OneMind FSM Kernel
+        uses: actions/checkout@v4
+        with:
+          repository: on1kage/onemind-FSM-Kernel
+          path: onemind-FSM-Kernel
+          fetch-depth: 1
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -46,6 +53,9 @@ jobs:
           python -m pytest -q --disable-warnings --maxfail=1 tests_hermetic
 
       - name: Run FSM audit (fail-closed)
+        env:
+          ONEMIND_KERNEL_DIR: ${{ github.workspace }}/onemind-FSM-Kernel
+
         run: |
           set -euo pipefail
           bash -euo pipefail bin/fsm_audit.sh
