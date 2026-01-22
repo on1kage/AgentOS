@@ -38,12 +38,14 @@ jobs:
       - name: Install test dependencies
         run: |
           set -euo pipefail
+          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
           python -m pip install --upgrade pip
           python -m pip install pytest
 
       - name: Compile src (fail-closed)
         run: |
           set -euo pipefail
+          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
           python -m compileall -q src
 
       - name: Run hermetic tests (fail-closed)
@@ -51,18 +53,22 @@ jobs:
           PYTHONPATH: src
         run: |
           set -euo pipefail
+          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
           python -m pytest -q --disable-warnings --maxfail=1 tests_hermetic
 
       - name: Run FSM audit (fail-closed)
         run: |
           set -euo pipefail
           python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
+          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
         run: |
           set -euo pipefail
+          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
           python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
         env:
           ONEMIND_KERNEL_DIR: ${{ github.workspace }}/onemind-FSM-Kernel
 
         run: |
           set -euo pipefail
+          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
           bash -euo pipefail bin/fsm_audit.sh
