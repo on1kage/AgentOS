@@ -57,6 +57,9 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
+        run: |
+          set -euo pipefail
+          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
         env:
           ONEMIND_KERNEL_DIR: ${{ github.workspace }}/onemind-FSM-Kernel
 
