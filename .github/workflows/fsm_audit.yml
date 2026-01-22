@@ -60,6 +60,9 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
+          bash -euo pipefail bin/fsm_audit.sh
+          set -euo pipefail
+          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
           python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
         run: |
           set -euo pipefail
