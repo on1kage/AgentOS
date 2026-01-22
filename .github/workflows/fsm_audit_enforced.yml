@@ -10,6 +10,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+      - name: Checkout OneMind Kernel
+        uses: actions/checkout@v4
+        with:
+          repository: on1kage/onemind-FSM-Kernel
+          path: onemind-FSM-Kernel
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -23,6 +28,8 @@ jobs:
           if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
           python -m pip install -e .
       - name: Run FSM audit
+        env:
+          ONEMIND_KERNEL_DIR: ${{ github.workspace }}/onemind-FSM-Kernel
         run: |
           set -euo pipefail
           bin/fsm_audit.sh
