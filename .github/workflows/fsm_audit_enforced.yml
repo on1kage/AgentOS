@@ -1,9 +1,6 @@
 name: FSM Audit + No Comment Enforcement
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 jobs:
   audit_and_enforce:
     runs-on: ubuntu-22.04
@@ -15,6 +12,7 @@ jobs:
         with:
           repository: on1kage/onemind-FSM-Kernel
           path: onemind-FSM-Kernel
+          token: ${{ secrets.onemindkernel }}
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -26,7 +24,6 @@ jobs:
           python -m pip install -U pip
           if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
-          python -m pip install -e .
       - name: Run FSM audit
         env:
           ONEMIND_KERNEL_DIR: ${{ github.workspace }}/onemind-FSM-Kernel
