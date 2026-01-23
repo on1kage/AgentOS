@@ -1,0 +1,3 @@
+[submodule "src/onemind-FSM-Kernel"]
+	url = git@github.com:on1kage/onemind-FSM-Kernel.git
+	path = src/onemind-FSM-Kernel
