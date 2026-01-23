@@ -19,7 +19,6 @@ jobs:
         with:
           python-version: "3.10"
       - run: python -m pip install -U pip
-      - run: python -m pip install -e .
       - run: python -m pip install pytest
       - run: PYTHONPATH=src python -c "from pathlib import Path; from agentos.evidence import EvidenceBundle; from agentos.execution import ExecutionSpec; from agentos.outcome import ExecutionOutcome; root=Path('/tmp/agentos_evidence_ci'); import shutil; shutil.rmtree(root, ignore_errors=True); root.mkdir(parents=True, exist_ok=True); ev=EvidenceBundle(str(root)); spec=ExecutionSpec(exec_id='exec_ci_0001',task_id='task_ci',role='envoy',action='deterministic_local_execution',kind='shell',cmd_argv=['/bin/echo','ok'],cwd='/tmp',env_allowlist=[],timeout_s=1,inputs_manifest_sha256='0000000000000000000000000000000000000000000000000000000000000000',paths_allowlist=['/tmp','/bin/echo'],note='ci validator seed'); ev.write_bundle(spec=spec,stdout=b'ok\\n',stderr=b'',outputs={},outcome=ExecutionOutcome.SUCCEEDED,reason='exit_code:0',idempotency_key='k')"
       - run: PYTHONPATH=src python tools/validate_evidence.py --evidence-root /tmp/agentos_evidence_ci
