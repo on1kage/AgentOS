@@ -1,9 +1,7 @@
-#!/usr/bin/env bash
 set -euo pipefail
 
 echo "[FSM-AUDIT] Starting OneMind FSM audit"
 
-# Locate kernel
 KERNEL_DIR="${ONEMIND_KERNEL_DIR:-$HOME/onemind-FSM-Kernel}"
 if [[ ! -d "$KERNEL_DIR" ]]; then
   echo "[FSM-AUDIT][FAIL] Kernel not found at $KERNEL_DIR"
@@ -15,7 +13,6 @@ export PYTHONPATH="$KERNEL_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 echo "[FSM-AUDIT] Using kernel at $KERNEL_DIR"
 echo "[FSM-AUDIT] Running persistent bootstrap (timeout)"
 
-# Hermetic audit: do not read developer ~/.config/onemind/subsystems.d
 TMP_HOME="$(mktemp -d)"
 trap 'rm -rf "$TMP_HOME"' EXIT
 mkdir -p "$TMP_HOME/.config/onemind/subsystems.d"
@@ -35,7 +32,6 @@ if [[ $RC -ne 0 && $RC -ne 124 ]]; then
   exit 1
 fi
 
-# Basic compliance check: must see audit header
 if ! echo "$OUTPUT" | grep -q "OneMind Kernel Full Subsystem Audit"; then
   echo "[FSM-AUDIT][FAIL] Audit header not found"
   exit 1
