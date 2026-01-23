@@ -72,7 +72,7 @@ spec = ExecutionSpec(
     cwd="/tmp",
     env_allowlist=[],
     timeout_s=1,
-    inputs_manifest_sha256="00" * 32,
+    inputs_manifest_sha256="0000000000000000000000000000000000000000000000000000000000000000",
     paths_allowlist=["/tmp", "/bin/echo"],
     note="ci validator seed",
 )
