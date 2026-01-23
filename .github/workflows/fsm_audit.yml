@@ -54,7 +54,12 @@ from agentos.outcome import ExecutionOutcome
 
 root = Path("/tmp/agentos_evidence_ci")
 if root.exists():
-    for p in sorted(root.rglob("*"), reverse=True):
+    import os
+for dirpath, dirnames, filenames in os.walk(root, topdown=False):
+    for fn in filenames:
+        Path(dirpath, fn).unlink()
+    for dn in dirnames:
+        Path(dirpath, dn).rmdir()
         if p.is_file() or p.is_symlink():
             p.unlink()
         elif p.is_dir():
