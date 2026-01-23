@@ -1,4 +1,3 @@
-#!/usr/bin/env zsh
 set -euo pipefail
 
 cd ~/ChatGPTProtocol || exit 1
