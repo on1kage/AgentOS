@@ -13,6 +13,7 @@ jobs:
         with:
           repository: on1kage/onemind-FSM-Kernel
           path: onemind-FSM-Kernel
+          token: ${{ secrets.onemindkernel }}
           fetch-depth: 1
       - uses: actions/setup-python@v5
         with:
