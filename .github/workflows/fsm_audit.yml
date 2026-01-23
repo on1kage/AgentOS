@@ -12,7 +12,6 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-22.04
-
     defaults:
       run:
         shell: bash
@@ -35,43 +34,86 @@ jobs:
           python-version: "3.10"
           cache: "pip"
 
-      - name: Install test dependencies
+      - name: Install package + test deps
         run: |
           set -euo pipefail
-          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
-          python -m pip install --upgrade pip
+          python -m pip install -U pip
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
+          python -m pip install -e .
           python -m pip install pytest
+
+      - name: Seed evidence bundle for CI validator
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python3 - <<'PY'
+from pathlib import Path
+from agentos.evidence import EvidenceBundle
+from agentos.execution import ExecutionSpec
+from agentos.outcome import ExecutionOutcome
+
+root = Path("/tmp/agentos_evidence_ci")
+if root.exists():
+    for p in sorted(root.rglob("*"), reverse=True):
+        if p.is_file() or p.is_symlink():
+            p.unlink()
+        elif p.is_dir():
+            p.rmdir()
+root.mkdir(parents=True, exist_ok=True)
+
+ev = EvidenceBundle(str(root))
+spec = ExecutionSpec(
+    exec_id="exec_ci_0001",
+    task_id="task_ci",
+    role="envoy",
+    action="deterministic_local_execution",
+    kind="shell",
+    cmd_argv=["/bin/echo", "ok"],
+    cwd="/tmp",
+    env_allowlist=[],
+    timeout_s=1,
+    inputs_manifest_sha256="00" * 32,
+    paths_allowlist=["/tmp", "/bin/echo"],
+    note="ci validator seed",
+)
+ev.write_bundle(
+    spec=spec,
+    stdout=b"ok\n",
+    stderr=b"",
+    outputs={},
+    outcome=ExecutionOutcome.SUCCEEDED,
+    reason="exit_code:0",
+    idempotency_key="k",
+)
+print("seeded", str(root))
+PY
+
+      - name: Validate evidence contract (fail-closed)
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python3 tools/validate_evidence.py --evidence-root /tmp/agentos_evidence_ci
 
       - name: Compile src (fail-closed)
         run: |
           set -euo pipefail
-          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
+          PYTHONPATH=src python3 tools/validate_evidence.py --evidence-root /tmp/agentos_evidence_ci
           python -m compileall -q src
+          PYTHONPATH=src python3 tools/validate_evidence.py --evidence-root /tmp/agentos_evidence_ci
 
       - name: Run hermetic tests (fail-closed)
         env:
           PYTHONPATH: src
         run: |
           set -euo pipefail
-          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
-          python -m pytest -q --disable-warnings --maxfail=1 tests_hermetic
+          python3 tools/validate_evidence.py --evidence-root /tmp/agentos_evidence_ci
+          pytest -q --disable-warnings --maxfail=1 tests_hermetic
+          python3 tools/validate_evidence.py --evidence-root /tmp/agentos_evidence_ci
 
       - name: Run FSM audit (fail-closed)
-        run: |
-          set -euo pipefail
-          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
-          bash -euo pipefail bin/fsm_audit.sh
-          set -euo pipefail
-          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
-          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
-        run: |
-          set -euo pipefail
-          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
-          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
         env:
           ONEMIND_KERNEL_DIR: ${{ github.workspace }}/onemind-FSM-Kernel
-
         run: |
           set -euo pipefail
-          python3 -m agentos.tools.validate_evidence --evidence-root /tmp/agentos_evidence_ci
+          PYTHONPATH=src python3 tools/validate_evidence.py --evidence-root /tmp/agentos_evidence_ci
           bash -euo pipefail bin/fsm_audit.sh
+          PYTHONPATH=src python3 tools/validate_evidence.py --evidence-root /tmp/agentos_evidence_ci
