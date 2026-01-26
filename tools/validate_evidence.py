@@ -143,6 +143,10 @@ def main(argv: list[str]) -> int:
     verify_root = evidence_root / "verify"
     rejections_marker = "rejections"
 
+    n_exec = 0
+    n_ver = 0
+    n_rej = 0
+
     for d in _iter_dirs(evidence_root):
         if d == evidence_root:
             continue
@@ -152,17 +156,22 @@ def main(argv: list[str]) -> int:
         if parts[0] == "verify":
             if len(parts) == 2:
                 _validate_verification_bundle(d, ver_c)
+                n_ver += 1
             continue
 
         if rejections_marker in parts:
             if len(parts) >= 3 and parts[-2] == rejections_marker:
                 _validate_rejection_bundle(d, rej_c)
+                n_rej += 1
             continue
 
         if len(parts) == 2:
             _validate_execution_bundle(d, exec_c)
+            n_exec += 1
 
+    print(f"evidence_ok execution={n_exec} verification={n_ver} rejection={n_rej} root={evidence_root} contract={contract_path}")
     return 0
+
 
 
 if __name__ == "__main__":
