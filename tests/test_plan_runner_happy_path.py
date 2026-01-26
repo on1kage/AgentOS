@@ -1,27 +1,47 @@
+import hashlib
 import tempfile
+import uuid
+from pathlib import Path
 
 from agentos.plan import Plan, PlanStep
 from agentos.plan_runner import PlanRunner
 from agentos.store_fs import FSStore
 
 
+def _sha256_hex(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
+
+
 def test_plan_runner_happy_path_two_steps():
     with tempfile.TemporaryDirectory() as tmp:
         store = FSStore(root=tmp)
 
+        plan_id = f"p_{uuid.uuid4().hex}"
+        step_id_1 = f"s_{uuid.uuid4().hex}"
+        step_id_2 = f"s_{uuid.uuid4().hex}"
+        task_id_1 = f"t_{uuid.uuid4().hex}"
+        task_id_2 = f"t_{uuid.uuid4().hex}"
+        exec_id_1 = f"exec_{uuid.uuid4().hex}"
+        exec_id_2 = f"exec_{uuid.uuid4().hex}"
+
         plan = Plan(
-            plan_id="p1",
+            plan_id=plan_id,
             steps=[
-                PlanStep(step_id="s1", role="morpheus", action="architecture", task_id="t_plan_1"),
-                PlanStep(step_id="s2", role="envoy", action="deterministic_local_execution", task_id="t_plan_2"),
+                PlanStep(step_id=step_id_1, role="morpheus", action="architecture", task_id=task_id_1),
+                PlanStep(
+                    step_id=step_id_2,
+                    role="envoy",
+                    action="deterministic_local_execution",
+                    task_id=task_id_2,
+                ),
             ],
         )
 
-        ims = "c" * 64
+        ims = _sha256_hex(uuid.uuid4().bytes)
 
         payloads = {
-            "t_plan_1": {
-                "exec_id": "exec_plan_1",
+            task_id_1: {
+                "exec_id": exec_id_1,
                 "kind": "shell",
                 "cmd_argv": ["python3", "-c", "print('ok1')"],
                 "cwd": tmp,
@@ -31,8 +51,8 @@ def test_plan_runner_happy_path_two_steps():
                 "paths_allowlist": [tmp],
                 "note": "plan step 1",
             },
-            "t_plan_2": {
-                "exec_id": "exec_plan_2",
+            task_id_2: {
+                "exec_id": exec_id_2,
                 "kind": "shell",
                 "cmd_argv": ["python3", "-c", "print('ok2')"],
                 "cwd": tmp,
@@ -44,7 +64,8 @@ def test_plan_runner_happy_path_two_steps():
             },
         }
 
-        pr = PlanRunner(store, evidence_root="evidence")
+        evidence_root = str(Path(tmp) / "evidence")
+        pr = PlanRunner(store, evidence_root=evidence_root)
 
         res = pr.run(plan, payloads_by_task_id=payloads)
         assert res.ok is True
