@@ -1,29 +1,40 @@
 name: FSM Audit + No Comment Enforcement
+
 on:
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   audit_and_enforce:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
       - name: Checkout OneMind Kernel
         uses: actions/checkout@v4
         with:
           repository: on1kage/onemind-FSM-Kernel
           path: onemind-FSM-Kernel
-          token: ${{ secrets.onemindkernel }}
+          token: ${{ secrets.ONEMINDKERNEL }}
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
           cache: "none"
+
       - name: Install package + test deps
         run: |
           set -euo pipefail
           python -m pip install -U pip
           if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
+
       - name: Run FSM audit
         env:
           ONEMIND_KERNEL_DIR: ${{ github.workspace }}/onemind-FSM-Kernel
@@ -33,17 +44,18 @@ jobs:
       - name: Enforce no comment lines in shell scripts
         run: |
           set -euo pipefail
-          files=$(find . -type f -name "*.sh")
+          files=$(find . -type f -name "*.sh" -not -path "./onemind-FSM-Kernel/*")
           for f in $files; do
-              if grep -q '^\s*#' "$f"; then
-                  echo "ERROR: Comment lines detected in $f"
-                  exit 1
-              fi
+            awk 'NR==1 && $0 ~ /^#!/ {next} $0 ~ /^[[:space:]]*#/ {print "ERROR: Comment line in " FILENAME ":" NR; exit 1}' "$f"
           done
+
+
+      - name: Run hermetic tests
       - name: Run hermetic tests
         run: |
           set -euo pipefail
           PYTHONPATH=src pytest -q --disable-warnings tests_hermetic
+
       - name: Seed evidence bundle for CI validator
         run: |
           set -euo pipefail
@@ -88,6 +100,7 @@ ev.write_bundle(
 )
 print("seeded", str(root))
 PY
+
       - name: Validate evidence contract
         run: |
           set -euo pipefail
