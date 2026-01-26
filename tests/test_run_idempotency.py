@@ -5,6 +5,7 @@ from agentos.router import ExecutionRouter
 from agentos.runner import TaskRunner
 from agentos.store_fs import FSStore
 from agentos.task import Task, TaskState
+from pathlib import Path as P
 
 
 def test_duplicate_execution_produces_rejection_with_prior_linkage():
@@ -37,7 +38,9 @@ def test_duplicate_execution_produces_rejection_with_prior_linkage():
         assert verify_task(store, task).ok
         assert ExecutionRouter(store).route(task).ok
 
-        runner = TaskRunner(store)
+        evidence_root = str(P(tmp) / "evidence")
+
+        runner = TaskRunner(store, evidence_root=evidence_root)
 
         # First run should succeed (and produce evidence under exec_id)
         r1 = runner.run_dispatched(task.task_id)
@@ -56,9 +59,8 @@ def test_duplicate_execution_produces_rejection_with_prior_linkage():
 
         # Verify rejection bundle exists with duplicate_execution reason and prior exec linkage
         import json
-        from pathlib import Path as P
 
-        rej_root = P("evidence") / task.task_id / "rejections"
+        rej_root = P(evidence_root) / task.task_id / "rejections"
         assert rej_root.is_dir()
 
         rejs = list(rej_root.glob("*/rejection.json"))
