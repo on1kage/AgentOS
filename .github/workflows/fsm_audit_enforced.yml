@@ -41,6 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           bin/fsm_audit.sh
+
       - name: Enforce no comment lines in shell scripts
         run: |
           set -euo pipefail
@@ -49,57 +50,15 @@ jobs:
             awk 'NR==1 && $0 ~ /^#!/ {next} $0 ~ /^[[:space:]]*#/ {print "ERROR: Comment line in " FILENAME ":" NR; exit 1}' "$f"
           done
 
-
-      - name: Run hermetic tests
       - name: Run hermetic tests
         run: |
           set -euo pipefail
           PYTHONPATH=src pytest -q --disable-warnings tests_hermetic
-
       - name: Seed evidence bundle for CI validator
         run: |
           set -euo pipefail
-          PYTHONPATH=src python3 - <<'PY'
-from pathlib import Path
-from agentos.evidence import EvidenceBundle
-from agentos.execution import ExecutionSpec
-from agentos.outcome import ExecutionOutcome
+          PYTHONPATH=src python3 -c "from pathlib import Path; from agentos.evidence import EvidenceBundle; from agentos.execution import ExecutionSpec; from agentos.outcome import ExecutionOutcome; root=Path('/tmp/agentos_evidence_ci'); (root.exists() and [q.unlink() if (q.is_file() or q.is_symlink()) else q.rmdir() for q in sorted(root.rglob('*'), reverse=True)]); root.mkdir(parents=True, exist_ok=True); ev=EvidenceBundle(str(root)); spec=ExecutionSpec(exec_id='exec_ci_0001', task_id='task_ci', role='envoy', action='deterministic_local_execution', kind='shell', cmd_argv=['/bin/echo','ok'], cwd='/tmp', env_allowlist=[], timeout_s=1, inputs_manifest_sha256='00'*32, paths_allowlist=['/tmp','/bin/echo'], note='ci validator seed'); ev.write_bundle(spec=spec, stdout=b'ok\\n', stderr=b'', outputs={}, outcome=ExecutionOutcome.SUCCEEDED, reason='exit_code:0', idempotency_key='k'); print('seeded', str(root))"
 
-root = Path("/tmp/agentos_evidence_ci")
-if root.exists():
-    for p in sorted(root.rglob("*"), reverse=True):
-        if p.is_file() or p.is_symlink():
-            p.unlink()
-        elif p.is_dir():
-            p.rmdir()
-root.mkdir(parents=True, exist_ok=True)
-
-ev = EvidenceBundle(str(root))
-spec = ExecutionSpec(
-    exec_id="exec_ci_0001",
-    task_id="task_ci",
-    role="envoy",
-    action="deterministic_local_execution",
-    kind="shell",
-    cmd_argv=["/bin/echo","ok"],
-    cwd="/tmp",
-    env_allowlist=[],
-    timeout_s=1,
-    inputs_manifest_sha256="00"*32,
-    paths_allowlist=["/tmp","/bin/echo"],
-    note="ci validator seed",
-)
-ev.write_bundle(
-    spec=spec,
-    stdout=b"ok\n",
-    stderr=b"",
-    outputs={},
-    outcome=ExecutionOutcome.SUCCEEDED,
-    reason="exit_code:0",
-    idempotency_key="k",
-)
-print("seeded", str(root))
-PY
 
       - name: Validate evidence contract
         run: |
