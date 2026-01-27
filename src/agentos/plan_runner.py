@@ -82,7 +82,7 @@ class PlanRunner:
         payloads = require_payload_map(payloads_by_task_id)
 
         policy_steps = [PolicyStep(role=s.role, action=s.action) for s in plan.steps]
-        pvr = verify_plan(policy_steps)
+        pvr = verify_plan(policy_steps, evidence_root=str(self.store.root / "evidence"))
 
         plan_spec_sha = plan.spec_sha256()
 

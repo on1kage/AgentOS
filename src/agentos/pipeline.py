@@ -53,7 +53,10 @@ class TaskVerifyResult:
         }
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
-def verify_plan(steps: List[Step]) -> PipelineResult:
+def _evidence_root_for_store(store: FSStore) -> str:
+    return str(store.root / "evidence")
+
+def verify_plan(steps: List[Step], evidence_root: str | None = None) -> PipelineResult:
     decisions: List[dict] = []
     ok = True
     for i, s in enumerate(steps):
@@ -71,7 +74,8 @@ def verify_plan(steps: List[Step]) -> PipelineResult:
     per_step: Dict[str, Any] = {str(row['i']): row for row in decisions}
     plan_bytes = canonical_json([{'role': s.role, 'action': s.action} for s in steps]).encode('utf-8')
     plan_spec_sha256 = sha256_hex(plan_bytes)
-    bundle = EvidenceBundle().write_verification_bundle(
+    eb = EvidenceBundle(root=evidence_root) if isinstance(evidence_root, str) and evidence_root else EvidenceBundle()
+    bundle = eb.write_verification_bundle(
         spec_sha256=plan_spec_sha256,
         decisions=per_step,
         reason='plan_verification',
@@ -107,7 +111,7 @@ def verify_task(store: FSStore, task: Task) -> TaskVerifyResult:
     if not isinstance(ims, str) or not re.fullmatch(r'[0-9a-f]{64}', ims):
         bad_reason = 'missing_or_invalid_inputs_manifest_sha256'
         fail_spec = sha256_hex(canonical_json({'task_id': task.task_id, 'attempt': task.attempt}).encode('utf-8'))
-        bundle = EvidenceBundle().write_verification_bundle(
+        bundle = EvidenceBundle(root=_evidence_root_for_store(store)).write_verification_bundle(
             spec_sha256=fail_spec,
             decisions={'role': task.role, 'action': task.action, 'allow': False, 'reason': bad_reason},
             reason='task_verification',
@@ -139,7 +143,7 @@ def verify_task(store: FSStore, task: Task) -> TaskVerifyResult:
 
     verify_spec = sha256_hex(canonical_json({'inputs_manifest_sha256': ims, 'role': task.role, 'action': task.action}).encode('utf-8'))
 
-    bundle = EvidenceBundle().write_verification_bundle(
+    bundle = EvidenceBundle(root=_evidence_root_for_store(store)).write_verification_bundle(
         spec_sha256=verify_spec,
         decisions={'role': task.role, 'action': task.action, 'allow': d.allow, 'reason': d.reason, 'inputs_manifest_sha256': ims},
         reason='task_verification',
