@@ -45,6 +45,7 @@ def test_plan_runner_retry_failure_is_stable():
                 "env_allowlist": [],
                 "timeout_s": 1,
                 "inputs_manifest_sha256": ims,
+                    "intent_compilation_manifest_sha256": ims,
                 "paths_allowlist": [tmp],
                 "note": "retry test",
             }

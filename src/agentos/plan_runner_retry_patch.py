@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import re
+
+HEX64 = re.compile(r'^[0-9a-f]{64}$')
+
 from dataclasses import replace
 from typing import Any, Dict, List, Optional
 
 from agentos.pipeline import Step as PolicyStep
 from agentos.pipeline import verify_plan, verify_task
 from agentos.plan import Plan, require_payload_map
+
+def _require_intent_compilation_manifest(payload: dict) -> str:
+    v = payload.get('intent_compilation_manifest_sha256')
+    if not isinstance(v, str) or not HEX64.fullmatch(v):
+        raise ValueError('missing_or_invalid_intent_compilation_manifest_sha256')
+    return v
 from agentos.plan_runner import PlanRunner, PlanRunResult, PlanStepResult
 from agentos.task import Task, TaskState
 
@@ -23,6 +33,12 @@ class PlanRunnerRetry(PlanRunner):
         partial_continue: bool = True,
     ) -> PlanRunResult:
         payloads = require_payload_map(payloads_by_task_id)
+
+        for st in plan.steps:
+            p = payloads.get(st.task_id)
+            if p is None:
+                continue
+            _require_intent_compilation_manifest(p)
 
         policy_steps = [PolicyStep(role=s.role, action=s.action) for s in plan.steps]
         pvr = verify_plan(policy_steps, evidence_root=str(self.store.root / "evidence"))
