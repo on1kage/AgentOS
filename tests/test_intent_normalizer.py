@@ -16,13 +16,13 @@ def test_normalizer_produces_candidates(tmp_path: Path) -> None:
         idempotency_key="idem_test_norm_1",
     )
 
-    assert receipt.bundle_dir.endswith(f"verify/{receipt.intent_sha256}")
+    assert receipt.bundle_dir.endswith(f"verify/{receipt.verification_spec_sha256}")
     manifest_path = Path(receipt.bundle_dir) / "manifest.sha256.json"
     assert manifest_path.is_file()
 
     raw = manifest_path.read_text(encoding="utf-8")
     assert '"reason":"intent_normalized"' in raw
-    assert f'"spec_sha256":"{receipt.intent_sha256}"' in raw
+    assert f'"spec_sha256":"{receipt.verification_spec_sha256}"' in raw
     assert '"stage":"intent_normalized"' in raw
 
 def test_normalizer_collision_safety(tmp_path: Path) -> None:

@@ -1,5 +1,6 @@
 from .intent_compiler_evidence import write_compilation_evidence
 from .plan_runner import verify_plan
+from .pipeline_verifier_patch import decide
 from .pipeline import Step
 
 def require_intent_compilation(payload: dict):

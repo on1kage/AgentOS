@@ -47,6 +47,7 @@ class IntentCandidate:
 @dataclass(frozen=True)
 class IntentNormalizedReceipt:
     intent_sha256: str
+    verification_spec_sha256: str
     bundle_dir: str
     manifest_sha256: str
 
@@ -147,6 +148,9 @@ class IntentNormalizer:
             if c.action not in KNOWN_ACTIONS:
                 raise RuntimeError(f"normalizer_produced_unknown_action:{c.action}")
 
+        verify_spec = sha256_hex(canonical_json({"stage":"intent_normalized","intent_sha256": ish,"normalized_at_utc": ts,"ruleset_version": 1}).encode("utf-8"))
+
+
         payload: Dict[str, Any] = {
             "intent_sha256": ish,
             "normalized_at_utc": ts,
@@ -157,14 +161,15 @@ class IntentNormalizer:
         }
 
         bundle = self._eb.write_verification_bundle(
-            spec_sha256=ish,
+            spec_sha256=verify_spec,
             decisions=payload,
             reason="intent_normalized",
             idempotency_key=idempotency_key,
         )
 
         return IntentNormalizedReceipt(
-            intent_sha256=ish,
+              intent_sha256=ish,
+              verification_spec_sha256=verify_spec,
             bundle_dir=str(bundle["bundle_dir"]),
             manifest_sha256=str(bundle["manifest_sha256"]),
         )
