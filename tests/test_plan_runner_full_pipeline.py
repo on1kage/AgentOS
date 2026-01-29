@@ -10,6 +10,7 @@ def test_full_pipeline_success():
 
 def test_full_pipeline_refusal():
     payload = {"intent_text": "do something unknown"}
-    with pytest.raises(ValueError) as e:
-        run_full_pipeline(payload)
-    assert "intent_compilation_refused" in str(e.value)
+    result = run_full_pipeline(payload)
+    assert result is not None
+    assert getattr(result, "ok", None) is False
+    assert getattr(result, "verification_manifest_sha256", None)

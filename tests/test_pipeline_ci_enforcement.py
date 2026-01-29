@@ -9,9 +9,10 @@ def test_pipeline_fails_without_intent():
 
 def test_pipeline_refuses_ambiguous_intent():
     payload = {"intent_text": "do something unknown"}
-    with pytest.raises(ValueError) as e:
-        run_full_pipeline(payload)
-    assert "intent_compilation_refused" in str(e.value)
+    result = run_full_pipeline(payload)
+    assert result is not None
+    assert getattr(result, "ok", None) is False
+    assert getattr(result, "verification_manifest_sha256", None)
 
 def test_pipeline_runs_valid_intent():
     payload = {"intent_text": "search for papers"}
