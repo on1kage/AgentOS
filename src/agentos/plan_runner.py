@@ -1,5 +1,4 @@
 from __future__ import annotations
-from .pipeline_verifier_patch import decide
 import re
 HEX64 = re.compile(r'^[0-9a-f]{64}$')
 from dataclasses import dataclass
