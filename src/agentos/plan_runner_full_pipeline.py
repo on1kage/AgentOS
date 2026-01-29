@@ -5,7 +5,7 @@ from pathlib import Path
 from pathlib import Path
 from pathlib import Path
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Set
 
 from agentos.canonical import canonical_json, sha256_hex
 from agentos.intent_evidence import IntentEvidence
@@ -13,6 +13,69 @@ from agentos.intent_normalizer import IntentNormalizer
 from agentos.pipeline import Step, PipelineResult, verify_plan
 from agentos.evidence import EvidenceBundle
 from agentos.store_fs import FSStore
+
+def _payload_unknown_keys(payload: dict, allowed: Set[str]) -> List[str]:
+    if not isinstance(payload, dict):
+        return ["__payload_not_dict__"]
+    ks: List[str] = []
+    for k in payload.keys():
+        if not isinstance(k, str):
+            ks.append("__non_string_key__")
+            continue
+        if k not in allowed:
+            ks.append(k)
+    return sorted(set(ks))
+
+def _fail_closed_payload_contract(
+    *,
+    stage: str,
+    payload: dict,
+    allowed_keys: Set[str],
+    evidence_root: str,
+    intent_sha256: str,
+) -> PipelineResult:
+    unknown = _payload_unknown_keys(payload, allowed_keys)
+    if not unknown:
+        return PipelineResult(
+            ok=True,
+            decisions=[],
+            verification_bundle_dir=None,
+            verification_manifest_sha256=None,
+        )
+
+    reason = f"payload_contract_violation:{stage}"
+    refusal_spec = sha256_hex(
+        canonical_json(
+            {
+                "stage": stage,
+                "intent_sha256": intent_sha256,
+                "reason": reason,
+                "allowed_keys": sorted(allowed_keys),
+                "unknown_keys": unknown,
+            }
+        ).encode("utf-8")
+    )
+
+    rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+        spec_sha256=refusal_spec,
+        decisions={
+            "stage": stage,
+            "intent_sha256": intent_sha256,
+            "refusal_reason": reason,
+            "allowed_keys": sorted(allowed_keys),
+            "unknown_keys": unknown,
+        },
+        reason="payload_contract_violation",
+        idempotency_key=intent_sha256,
+    )
+
+    return PipelineResult(
+        ok=False,
+        decisions=[{"stage": stage, "reason": reason, "unknown_keys": unknown}],
+        verification_bundle_dir=rb["bundle_dir"],
+        verification_manifest_sha256=rb["manifest_sha256"],
+    )
+
 
 
 def _deterministic_submitted_at_utc(intent_text: str) -> str:
@@ -86,6 +149,17 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
     submitted_at_utc = _deterministic_submitted_at_utc(intent_text)
     intent_sha256 = _deterministic_intent_sha256(intent_text, submitted_at_utc)
 
+    entry_allowed: Set[str] = {"intent_text"}
+    entry_chk = _fail_closed_payload_contract(
+        stage="payload_contract_entry",
+        payload=payload,
+        allowed_keys=entry_allowed,
+        evidence_root=evidence_root,
+        intent_sha256=intent_sha256,
+    )
+    if entry_chk.ok is False:
+        return entry_chk
+
     ie = IntentEvidence(store, evidence_root=evidence_root)
     ie.write_intent_ingest(
         intent_text,
@@ -138,4 +212,21 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
     }
 
     steps: List[Step] = [Step(role=role, action=action)]
+
+    exit_allowed: Set[str] = {
+        "intent_text",
+        "intent_sha256",
+        "intent_compilation_manifest_sha256",
+        "compiled_intent",
+    }
+    exit_chk = _fail_closed_payload_contract(
+        stage="payload_contract_exit",
+        payload=payload,
+        allowed_keys=exit_allowed,
+        evidence_root=evidence_root,
+        intent_sha256=intent_sha256,
+    )
+    if exit_chk.ok is False:
+        return exit_chk
+
     return verify_plan(steps, evidence_root=evidence_root)
