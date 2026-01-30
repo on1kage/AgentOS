@@ -147,6 +147,8 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
             "selected": {"role": role, "action": action},
             "intent_compilation_manifest_sha256": bundle_info["manifest_sha256"],
         }
+        payload["intent_sha256"] = intent_sha256
+        payload["intent_compilation_manifest_sha256"] = bundle_info["manifest_sha256"]
         exit_chk = _fail_closed_payload_contract(
             stage="payload_contract_exit",
             payload=payload,
