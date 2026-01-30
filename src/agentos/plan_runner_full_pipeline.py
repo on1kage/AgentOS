@@ -123,6 +123,73 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
     ie = IntentEvidence(store, evidence_root=evidence_root)
     ie.write_intent_ingest(intent_text, submitted_at_utc=submitted_at_utc, submitter_id=None)
 
+    intent_source = os.environ.get("AGENTOS_INTENT_SOURCE")
+    if intent_source == "nl_translator_v1":
+        from agentos.nl_translator_v1 import translate_nl_to_proposed
+        from agentos.proposed_intent_v1 import parse_proposed_intent_v1, ProposedIntentV1
+        from agentos.intent_classes import ROLE_FOR_MODE, ACTION_FOR_MODE
+        tr = translate_nl_to_proposed(intent_text)
+        if isinstance(tr, CompilationRefusal):
+            spec_sha = sha256_hex(canonical_json({"stage": "nl_translator_refusal", "reason": tr.refusal_reason}).encode("utf-8"))
+            rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+                spec_sha256=spec_sha,
+                decisions={"intent_text": intent_text, "refusal_reason": tr.refusal_reason},
+                reason="nl_translator_refusal",
+                idempotency_key=intent_sha256,
+            )
+            return PipelineResult(
+                ok=False,
+                decisions=[{"stage": "nl_translator_refusal", "reason": tr.refusal_reason}],
+                verification_bundle_dir=rb["bundle_dir"],
+                verification_manifest_sha256=rb["manifest_sha256"],
+            )
+        proposed = parse_proposed_intent_v1(intent_text, tr)
+        if isinstance(proposed, CompilationRefusal):
+            spec_sha = sha256_hex(canonical_json({"stage": "proposed_intent_refusal", "reason": proposed.refusal_reason}).encode("utf-8"))
+            rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+                spec_sha256=spec_sha,
+                decisions={"intent_text": intent_text, "refusal_reason": proposed.refusal_reason},
+                reason="proposed_intent_refusal",
+                idempotency_key=intent_sha256,
+            )
+            return PipelineResult(
+                ok=False,
+                decisions=[{"stage": "proposed_intent_refusal", "reason": proposed.refusal_reason}],
+                verification_bundle_dir=rb["bundle_dir"],
+                verification_manifest_sha256=rb["manifest_sha256"],
+            )
+        assert isinstance(proposed, ProposedIntentV1)
+        proposed_dict = {"mode": proposed.mode, "query": proposed.query, "max_results": proposed.max_results, "no_network": proposed.no_network, "read_only": proposed.read_only}
+        spec_sha = sha256_hex(canonical_json(proposed_dict).encode("utf-8"))
+        rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+            spec_sha256=spec_sha,
+            decisions={"intent_text": intent_text, "proposed_intent": proposed_dict},
+            reason="nl_translation",
+            idempotency_key=intent_sha256,
+        )
+        role = ROLE_FOR_MODE[proposed.mode]
+        action = ACTION_FOR_MODE[proposed.mode]
+        steps: List[Step] = [Step(role=role, action=action)]
+        exit_allowed: Set[str] = {"intent_text", "intent_sha256", "intent_compilation_manifest_sha256", "compiled_intent"}
+        payload["compiled_intent"] = {
+            "intent_sha256": intent_sha256,
+            "selected": {"role": role, "action": action},
+            "intent_compilation_manifest_sha256": rb["manifest_sha256"],
+            "proposed_intent": proposed_dict,
+        }
+        payload["intent_sha256"] = intent_sha256
+        payload["intent_compilation_manifest_sha256"] = rb["manifest_sha256"]
+        exit_chk = _fail_closed_payload_contract(
+            stage="payload_contract_exit",
+            payload=payload,
+            allowed_keys=exit_allowed,
+            evidence_root=evidence_root,
+            intent_sha256=intent_sha256,
+        )
+        if exit_chk.ok is False:
+            return exit_chk
+        return verify_plan(steps, evidence_root=evidence_root)
+
     use_new_compiler = os.environ.get("AGENTOS_INTENT_COMPILER") == "research_or_local_v1"
     if use_new_compiler:
         compiler = ResearchOrLocalIntentCompiler()
