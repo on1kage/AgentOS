@@ -10,8 +10,6 @@ from agentos.pipeline import Step, PipelineResult, verify_plan
 from agentos.evidence import EvidenceBundle
 from agentos.store_fs import FSStore
 from agentos.research_or_local_intent_compiler import CompilationRefusal, ResearchOrLocalIntentCompiler
-from agentos.intent_compiler_evidence import write_compilation_evidence
-from agentos.intent_compiler_evidence_bundle import write_compiler_evidence
 from agentos.intent_compiler_evidence_validator import verify_compiler_evidence
 
 def _payload_unknown_keys(payload: dict, allowed: Set[str]) -> List[str]:
@@ -129,7 +127,18 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
     if use_new_compiler:
         compiler = ResearchOrLocalIntentCompiler()
         result = compiler.compile(intent_text, intent_sha256=intent_sha256)
-        bundle_info = write_compiler_evidence(intent_text, result)
+        if isinstance(result, CompilationRefusal):
+            compiled = {"refusal_reason": result.refusal_reason}
+        else:
+            compiled = result.plan_spec
+        spec_sha = sha256_hex(canonical_json(compiled).encode("utf-8"))
+        rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+            spec_sha256=spec_sha,
+            decisions={"intent_text": intent_text, "compiled_result": compiled},
+            reason="compiler_evidence",
+            idempotency_key=intent_sha256,
+        )
+        bundle_info = {"bundle_dir": rb["bundle_dir"], "manifest_sha256": rb["manifest_sha256"]}
         verify_compiler_evidence(bundle_info["bundle_dir"])
         if isinstance(result, CompilationRefusal):
             return PipelineResult(
