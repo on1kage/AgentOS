@@ -9,8 +9,6 @@ from agentos.intent_normalizer import IntentNormalizer
 from agentos.pipeline import Step, PipelineResult, verify_plan
 from agentos.evidence import EvidenceBundle
 from agentos.store_fs import FSStore
-from agentos.research_or_local_intent_compiler import CompilationRefusal, ResearchOrLocalIntentCompiler
-from agentos.intent_compiler_evidence_validator import verify_compiler_evidence
 
 def _payload_unknown_keys(payload: dict, allowed: Set[str]) -> List[str]:
     if not isinstance(payload, dict):
@@ -272,8 +270,6 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
                 legacy_id="nl_translator_v1",
             )
         from agentos.nl_translator_v1 import translate_nl_to_proposed
-        from agentos.proposed_intent_v1 import parse_proposed_intent_v1, ProposedIntentV1
-        from agentos.intent_classes import ROLE_FOR_MODE, ACTION_FOR_MODE
         tr = translate_nl_to_proposed(intent_text)
         if isinstance(tr, CompilationRefusal):
             spec_sha = sha256_hex(canonical_json({"stage": "nl_translator_refusal", "reason": tr.refusal_reason}).encode("utf-8"))

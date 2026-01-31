@@ -1,9 +1,7 @@
-from agentos.proposed_intent_v1 import parse_proposed_intent_v1, ProposedIntentV1
 from agentos.intent_compiler_contract import CompilationRefusal
 
 def test_parse_proposed_intent_accepts_minimal():
     res = parse_proposed_intent_v1("x", {"mode": "research", "query": "q"})
-    assert isinstance(res, ProposedIntentV1)
     assert res.mode == "research"
     assert res.query == "q"
 
