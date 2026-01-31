@@ -109,7 +109,7 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
     submitted_at_utc = _deterministic_submitted_at_utc(intent_text)
     intent_sha256 = _deterministic_intent_sha256(intent_text, submitted_at_utc)
 
-    entry_allowed: Set[str] = {"intent_text"}
+    entry_allowed: Set[str] = {"intent_text", "plan_spec"}
     entry_chk = _fail_closed_payload_contract(
         stage="payload_contract_entry",
         payload=payload,
@@ -124,6 +124,117 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
     ie.write_intent_ingest(intent_text, submitted_at_utc=submitted_at_utc, submitter_id=None)
 
     intent_source = os.environ.get("AGENTOS_INTENT_SOURCE")
+    if intent_source == "planspec_v1":
+        ps = payload.get("plan_spec")
+        payload.pop("plan_spec", None)
+        allowed_ps = {"role", "action", "metadata"}
+        if not isinstance(ps, dict):
+            refusal_reason = "planspec_invalid:not_a_dict"
+            refusal_spec = sha256_hex(canonical_json({"stage": "planspec_refusal", "intent_sha256": intent_sha256, "reason": refusal_reason}).encode("utf-8"))
+            rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+                spec_sha256=refusal_spec,
+                decisions={"stage": "planspec_refusal", "intent_sha256": intent_sha256, "refusal_reason": refusal_reason},
+                reason="planspec_refusal",
+                idempotency_key=intent_sha256,
+            )
+            return PipelineResult(
+                ok=False,
+                decisions=[{"stage": "planspec_refusal", "reason": refusal_reason}],
+                verification_bundle_dir=rb["bundle_dir"],
+                verification_manifest_sha256=rb["manifest_sha256"],
+            )
+        unknown_ps = _payload_unknown_keys(ps, allowed_ps)
+        if unknown_ps:
+            refusal_reason = "planspec_invalid:unknown_keys"
+            refusal_spec = sha256_hex(canonical_json({"stage": "planspec_refusal", "intent_sha256": intent_sha256, "reason": refusal_reason, "unknown_keys": unknown_ps}).encode("utf-8"))
+            rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+                spec_sha256=refusal_spec,
+                decisions={"stage": "planspec_refusal", "intent_sha256": intent_sha256, "refusal_reason": refusal_reason, "unknown_keys": unknown_ps},
+                reason="planspec_refusal",
+                idempotency_key=intent_sha256,
+            )
+            return PipelineResult(
+                ok=False,
+                decisions=[{"stage": "planspec_refusal", "reason": refusal_reason, "unknown_keys": unknown_ps}],
+                verification_bundle_dir=rb["bundle_dir"],
+                verification_manifest_sha256=rb["manifest_sha256"],
+            )
+        role = ps.get("role")
+        action = ps.get("action")
+        metadata = ps.get("metadata", {})
+        if not isinstance(role, str) or not role:
+            refusal_reason = "planspec_invalid:missing_or_invalid_role"
+            refusal_spec = sha256_hex(canonical_json({"stage": "planspec_refusal", "intent_sha256": intent_sha256, "reason": refusal_reason}).encode("utf-8"))
+            rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+                spec_sha256=refusal_spec,
+                decisions={"stage": "planspec_refusal", "intent_sha256": intent_sha256, "refusal_reason": refusal_reason},
+                reason="planspec_refusal",
+                idempotency_key=intent_sha256,
+            )
+            return PipelineResult(
+                ok=False,
+                decisions=[{"stage": "planspec_refusal", "reason": refusal_reason}],
+                verification_bundle_dir=rb["bundle_dir"],
+                verification_manifest_sha256=rb["manifest_sha256"],
+            )
+        if not isinstance(action, str) or not action:
+            refusal_reason = "planspec_invalid:missing_or_invalid_action"
+            refusal_spec = sha256_hex(canonical_json({"stage": "planspec_refusal", "intent_sha256": intent_sha256, "reason": refusal_reason}).encode("utf-8"))
+            rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+                spec_sha256=refusal_spec,
+                decisions={"stage": "planspec_refusal", "intent_sha256": intent_sha256, "refusal_reason": refusal_reason},
+                reason="planspec_refusal",
+                idempotency_key=intent_sha256,
+            )
+            return PipelineResult(
+                ok=False,
+                decisions=[{"stage": "planspec_refusal", "reason": refusal_reason}],
+                verification_bundle_dir=rb["bundle_dir"],
+                verification_manifest_sha256=rb["manifest_sha256"],
+            )
+        if not isinstance(metadata, dict):
+            refusal_reason = "planspec_invalid:metadata_not_dict"
+            refusal_spec = sha256_hex(canonical_json({"stage": "planspec_refusal", "intent_sha256": intent_sha256, "reason": refusal_reason}).encode("utf-8"))
+            rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+                spec_sha256=refusal_spec,
+                decisions={"stage": "planspec_refusal", "intent_sha256": intent_sha256, "refusal_reason": refusal_reason},
+                reason="planspec_refusal",
+                idempotency_key=intent_sha256,
+            )
+            return PipelineResult(
+                ok=False,
+                decisions=[{"stage": "planspec_refusal", "reason": refusal_reason}],
+                verification_bundle_dir=rb["bundle_dir"],
+                verification_manifest_sha256=rb["manifest_sha256"],
+            )
+        norm_ps = {"role": role, "action": action, "metadata": metadata}
+        spec_sha = sha256_hex(canonical_json(norm_ps).encode("utf-8"))
+        rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+            spec_sha256=spec_sha,
+            decisions={"intent_text": intent_text, "intent_sha256": intent_sha256, "plan_spec": norm_ps},
+            reason="planspec_evidence",
+            idempotency_key=intent_sha256,
+        )
+        steps: List[Step] = [Step(role=role, action=action)]
+        exit_allowed: Set[str] = {"intent_text", "intent_sha256", "intent_compilation_manifest_sha256", "compiled_intent"}
+        payload["compiled_intent"] = {
+            "intent_sha256": intent_sha256,
+            "selected": {"role": role, "action": action},
+            "intent_compilation_manifest_sha256": rb["manifest_sha256"],
+            "plan_spec": norm_ps,
+        }
+        payload["intent_sha256"] = intent_sha256
+        payload["intent_compilation_manifest_sha256"] = rb["manifest_sha256"]
+        exit_chk = _fail_closed_payload_contract(
+            stage="payload_contract_exit",
+            payload=payload,
+            allowed_keys=exit_allowed,
+            evidence_root=evidence_root,
+            intent_sha256=intent_sha256,
+        )
+        if exit_chk.ok is False:
+            return exit_chk
+        return verify_plan(steps, evidence_root=evidence_root)
     if intent_source == "nl_translator_v1":
         from agentos.nl_translator_v1 import translate_nl_to_proposed
         from agentos.proposed_intent_v1 import parse_proposed_intent_v1, ProposedIntentV1

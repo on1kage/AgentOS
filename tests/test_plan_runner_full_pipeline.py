@@ -14,3 +14,49 @@ def test_full_pipeline_refusal():
     assert result is not None
     assert getattr(result, "ok", None) is False
     assert getattr(result, "verification_manifest_sha256", None)
+
+def test_planspec_success_authorized(monkeypatch):
+    monkeypatch.setenv("AGENTOS_INTENT_SOURCE", "planspec_v1")
+    payload = {
+        "intent_text": "any text (ignored by planspec path)",
+        "plan_spec": {"role": "morpheus", "action": "verification", "metadata": {}},
+    }
+    result = run_full_pipeline(payload)
+    assert result is not None
+    assert getattr(result, "ok", None) is True
+    assert "compiled_intent" in payload
+    ci = payload["compiled_intent"]
+    assert ci["selected"]["role"] == "morpheus"
+    assert ci["selected"]["action"] == "verification"
+    assert getattr(result, "verification_manifest_sha256", None)
+
+def test_planspec_refusal_missing_planspec(monkeypatch):
+    monkeypatch.setenv("AGENTOS_INTENT_SOURCE", "planspec_v1")
+    payload = {"intent_text": "x"}
+    result = run_full_pipeline(payload)
+    assert result is not None
+    assert getattr(result, "ok", None) is False
+    assert getattr(result, "verification_manifest_sha256", None)
+
+def test_planspec_refusal_unknown_keys(monkeypatch):
+    monkeypatch.setenv("AGENTOS_INTENT_SOURCE", "planspec_v1")
+    payload = {
+        "intent_text": "x",
+        "plan_spec": {"role": "morpheus", "action": "verification", "wat": 1},
+    }
+    result = run_full_pipeline(payload)
+    assert result is not None
+    assert getattr(result, "ok", None) is False
+    assert getattr(result, "verification_manifest_sha256", None)
+
+def test_planspec_refusal_invalid_metadata(monkeypatch):
+    monkeypatch.setenv("AGENTOS_INTENT_SOURCE", "planspec_v1")
+    payload = {
+        "intent_text": "x",
+        "plan_spec": {"role": "morpheus", "action": "verification", "metadata": "nope"},
+    }
+    result = run_full_pipeline(payload)
+    assert result is not None
+    assert getattr(result, "ok", None) is False
+    assert getattr(result, "verification_manifest_sha256", None)
+
