@@ -300,7 +300,6 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
                 verification_bundle_dir=rb["bundle_dir"],
                 verification_manifest_sha256=rb["manifest_sha256"],
             )
-        assert isinstance(proposed, ProposedIntentV1)
         proposed_dict = {"mode": proposed.mode, "query": proposed.query, "max_results": proposed.max_results, "no_network": proposed.no_network, "read_only": proposed.read_only}
         spec_sha = sha256_hex(canonical_json(proposed_dict).encode("utf-8"))
         rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
@@ -334,7 +333,6 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
 
     use_new_compiler = os.environ.get("AGENTOS_INTENT_COMPILER") == "research_or_local_v1"
     if use_new_compiler:
-        compiler = ResearchOrLocalIntentCompiler()
         result = compiler.compile(intent_text, intent_sha256=intent_sha256)
         if isinstance(result, CompilationRefusal):
             compiled = {"refusal_reason": result.refusal_reason}

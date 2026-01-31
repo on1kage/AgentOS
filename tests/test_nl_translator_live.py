@@ -1,3 +1,4 @@
+from agentos.legacy_backup.research_or_local_intent_compiler import CompilationRefusal
 import os
 from agentos.agent_pipeline_entry import execute_agent_pipeline
 
