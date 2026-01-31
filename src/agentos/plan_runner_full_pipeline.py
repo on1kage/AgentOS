@@ -63,6 +63,33 @@ def _deterministic_intent_sha256(intent_text: str, submitted_at_utc: str) -> str
     base = {"intent_text": intent_text, "submitted_at_utc": submitted_at_utc, "submitter_id": None}
     return sha256_hex(canonical_json(base).encode("utf-8"))
 
+def _legacy_path_block(*, stage: str, evidence_root: str, intent_sha256: str, intent_text: str, legacy_id: str) -> PipelineResult:
+    reason = f"legacy_path_blocked:{legacy_id}"
+    spec_sha = sha256_hex(canonical_json({
+        "stage": stage,
+        "intent_sha256": intent_sha256,
+        "legacy_id": legacy_id,
+        "reason": reason,
+    }).encode("utf-8"))
+    rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+        spec_sha256=spec_sha,
+        decisions={
+            "stage": stage,
+            "intent_sha256": intent_sha256,
+            "intent_text": intent_text,
+            "legacy_id": legacy_id,
+            "refusal_reason": reason,
+        },
+        reason="legacy_path_blocked",
+        idempotency_key=intent_sha256,
+    )
+    return PipelineResult(
+        ok=False,
+        decisions=[{"stage": stage, "reason": reason, "legacy_id": legacy_id}],
+        verification_bundle_dir=rb["bundle_dir"],
+        verification_manifest_sha256=rb["manifest_sha256"],
+    )
+
 def _select_candidate(decisions: Dict[str, Any]) -> Tuple[str, str]:
     cands = decisions.get("candidates")
     unresolved = decisions.get("unresolved")
@@ -236,6 +263,14 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
             return exit_chk
         return verify_plan(steps, evidence_root=evidence_root)
     if intent_source == "nl_translator_v1":
+        if os.environ.get("AGENTOS_ALLOW_LEGACY_NL_TRANSLATOR") != "1":
+            return _legacy_path_block(
+                stage="legacy_gate",
+                evidence_root=evidence_root,
+                intent_sha256=intent_sha256,
+                intent_text=intent_text,
+                legacy_id="nl_translator_v1",
+            )
         from agentos.nl_translator_v1 import translate_nl_to_proposed
         from agentos.proposed_intent_v1 import parse_proposed_intent_v1, ProposedIntentV1
         from agentos.intent_classes import ROLE_FOR_MODE, ACTION_FOR_MODE
