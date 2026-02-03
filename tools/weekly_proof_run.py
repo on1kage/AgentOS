@@ -18,12 +18,12 @@ from agentos.evidence import EvidenceBundle
 from agentos.outcome import ExecutionOutcome
 from agentos.adapter_registry import ADAPTERS
 
+
+
 # Override scout_cmd and envoy_cmd dynamically from ADAPTERS
-scout_cmd = ADAPTERS['scout']['cmd']
+scout_cmd = ["python3","-c","import sys,runpy; sys.path[:0]=[\"src\",\"src/onemind-FSM-Kernel/src\"]; runpy.run_path(\"tools/scout_live_probe.py\", run_name='__main__')"]
 scout_env_allowlist = ADAPTERS['scout']['env_allowlist']
-envoy_cmd = ADAPTERS['envoy']['cmd']
+envoy_cmd = ["python3","-c","import sys,runpy; sys.path[:0]=[\"src\",\"src/onemind-FSM-Kernel/src\"]; runpy.run_path(\"tools/envoy_live_probe.py\", run_name='__main__')"]
 envoy_env_allowlist = ADAPTERS['envoy']['env_allowlist']
 
 
-scout_cmd = ['python3','-c',f'import sys,runpy; sys.path[:0]=['src','src/onemind-FSM-Kernel/src']; runpy.run_path(f'tools/scout_live_probe.py', run_name='__main__')']
-envoy_cmd = ['python3','-c',f'import sys,runpy; sys.path[:0]=['src','src/onemind-FSM-Kernel/src']; runpy.run_path(f'tools/envoy_live_probe.py', run_name='__main__')']
