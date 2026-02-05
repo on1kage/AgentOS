@@ -4,7 +4,7 @@ import os
 import time
 import shutil
 from pathlib import Path
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any
 from agentos.canonical import canonical_json, sha256_hex
 from agentos.adapter_registry import ADAPTERS
 from agentos.execution import ExecutionSpec, canonical_inputs_manifest
@@ -20,11 +20,8 @@ def _now_run_id() -> str:
 def _store_root(intent_name: str, run_id: str) -> Path:
     return Path("store") / "weekly_proof" / intent_name / run_id
 
-def _required_env_present(env_allowlist: list[str]) -> Tuple[bool, list[str]]:
-    missing = []
-    for k in env_allowlist:
-        if k not in os.environ or os.environ.get(k, "") == "":
-            missing.append(k)
+def _required_env_present(env_allowlist: list[str]):
+    missing = [k for k in env_allowlist if not os.environ.get(k)]
     return (len(missing) == 0, missing)
 
 def _make_spec(*, role: str, task_id: str, exec_id: str, cmd_argv: list[str], env_allowlist: list[str], cwd: str, paths_allowlist: list[str], intent_name: str) -> ExecutionSpec:
@@ -46,130 +43,71 @@ def _make_spec(*, role: str, task_id: str, exec_id: str, cmd_argv: list[str], en
 
 def _run_role(*, intent_name: str, run_id: str, role: str, store_root: Path, cwd: str, paths_allowlist: list[str], require_env: bool) -> Dict[str, Any]:
     adapter = ADAPTERS.get(role)
-    if not isinstance(adapter, dict):
-        raise RuntimeError(f"unknown_role:{role}")
-
-    cmd = adapter.get("cmd")
-    env_allowlist = adapter.get("env_allowlist")
-    if not isinstance(cmd, list) or not all(isinstance(x, str) and x for x in cmd):
-        raise RuntimeError(f"invalid_cmd_for_role:{role}")
-    if not isinstance(env_allowlist, list) or not all(isinstance(x, str) and x for x in env_allowlist):
-        raise RuntimeError(f"invalid_env_allowlist_for_role:{role}")
-
+    cmd = list(adapter["cmd"]) + [intent_name]
+    env_allowlist = adapter["env_allowlist"]
     ok_env, missing = _required_env_present(env_allowlist)
-    if not ok_env and (not require_env):
-        return {
-            "ok": False,
-            "skipped": True,
-            "reason": "missing_required_env",
-            "missing_env": missing,
-        }
-    if not ok_env and require_env:
-        raise RuntimeError(f"missing_required_env_for_role:{role}:{','.join(missing)}")
+    if not ok_env:
+        if require_env:
+            raise RuntimeError(f"missing_required_env_for_role:{role}:{','.join(missing)}")
+        else:
+            return {"ok": False, "skipped": True, "reason": "missing_required_env", "missing_env": missing}
 
     task_id = f"weekly_{role}"
     exec_id = run_id
-    spec = _make_spec(
-        role=role,
-        task_id=task_id,
-        exec_id=exec_id,
-        cmd_argv=cmd,
-        env_allowlist=env_allowlist,
-        cwd=cwd,
-        paths_allowlist=paths_allowlist,
-        intent_name=intent_name,
-    )
-
-    evidence_root = store_root / "evidence" / task_id
-    bundle = EvidenceBundle(root=str(evidence_root))
-    ex = LocalExecutor()
-    r = ex.run(spec)
-
-    outcome = ExecutionOutcome.SUCCEEDED if r.exit_code == 0 else ExecutionOutcome.FAILED
-    reason = "exit_code_0" if r.exit_code == 0 else f"exit_code_{r.exit_code}"
-    outputs: Dict[str, bytes] = {}
-    try:
-        parsed = json.loads(r.stdout.decode("utf-8", errors="replace"))
-        outputs["parsed.json"] = canonical_json(parsed).encode("utf-8")
-    except Exception:
-        pass
-
-    bundle_info = bundle.write_bundle(
-        spec=spec,
-        stdout=r.stdout,
-        stderr=r.stderr,
-        outputs=outputs,
-        outcome=outcome,
-        reason=reason,
-        idempotency_key=None,
-    )
-
+    spec = _make_spec(role=role, task_id=task_id, exec_id=exec_id, cmd_argv=cmd, env_allowlist=env_allowlist, cwd=cwd, paths_allowlist=paths_allowlist, intent_name=intent_name)
+    executor = LocalExecutor()
+    r = executor.run(spec)
+    evidence = EvidenceBundle().write_bundle(spec=spec, stdout=r.stdout, stderr=r.stderr, outputs={}, outcome=ExecutionOutcome.SUCCEEDED if r.exit_code == 0 else ExecutionOutcome.FAILED, reason="weekly_proof")
     return {
         "ok": r.exit_code == 0,
         "skipped": False,
         "exit_code": r.exit_code,
-        "bundle_dir": bundle_info.get("bundle_dir"),
-        "spec_sha256": bundle_info.get("spec_sha256"),
-        "manifest_sha256": bundle_info.get("manifest_sha256"),
+        "bundle_dir": evidence.get("bundle_dir"),
+        "spec_sha256": evidence.get("spec_sha256"),
+        "manifest_sha256": evidence.get("manifest_sha256"),
     }
 
-def _parse_roles(s: str) -> List[str]:
-    items = []
-    for part in (s or "").split(","):
-        v = part.strip()
-        if v:
-            items.append(v)
-    if not items:
-        raise ValueError("roles_empty")
-    return items
+def _parse_roles(s: str):
+    return [v.strip() for v in (s or "").split(",") if v.strip()]
 
 def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
     run_id = _now_run_id()
-    store_root = _store_root(intent_name, run_id)
-
-    if store_root.exists():
-        shutil.rmtree(store_root)
-    store_root.mkdir(parents=True, exist_ok=True)
-
-    cwd = str(Path.cwd())
-    paths_allowlist = [str(store_root.resolve()), cwd]
-
+    intents = [i.strip() for i in intent_name.split(",") if i.strip()]
     roles = _parse_roles(roles_csv)
-    results: Dict[str, Any] = {}
     exit_code = 0
 
-    for role in roles:
-        require_env = True
-        if role == "scout" and (not require_scout):
-            require_env = False
-        res = _run_role(
-            intent_name=intent_name,
-            run_id=run_id,
-            role=role,
-            store_root=store_root,
-            cwd=cwd,
-            paths_allowlist=paths_allowlist,
-            require_env=require_env,
-        )
-        results[role] = res
-        if role == "envoy" and not res.get("ok", False):
-            exit_code = 2
-        if role == "scout":
-            if res.get("skipped", False):
-                pass
-            elif not res.get("ok", False):
-                exit_code = 3
+    for intent in intents:
+        store_root = _store_root(intent, run_id)
+        if store_root.exists():
+            shutil.rmtree(store_root)
+        store_root.mkdir(parents=True, exist_ok=True)
+        cwd = str(Path.cwd())
+        paths_allowlist = [str(store_root.resolve()), cwd]
+        results: Dict[str, Any] = {}
 
-    payload = {
-        "schema_version": SCHEMA_VERSION,
-        "run_id": run_id,
-        "store_root": str(store_root),
-        "intent": intent_name,
-        "roles": roles,
-        "results": results,
-    }
-    print(canonical_json(payload))
-    return int(exit_code)
+        for role in roles:
+            require_env = True
+            if role == "scout" and not require_scout:
+                require_env = False
+            res = _run_role(intent_name=intent, run_id=run_id, role=role, store_root=store_root, cwd=cwd, paths_allowlist=paths_allowlist, require_env=require_env)
+            results[role] = res
+            if role == "envoy" and not res.get("ok", False):
+                exit_code = 2
+            if role == "scout":
+                if not res.get("skipped", False) and not res.get("ok", False):
+                    exit_code = 3
+
+        payload = {
+            "schema_version": SCHEMA_VERSION,
+            "run_id": run_id,
+            "store_root": str(store_root),
+            "intent": intent,
+            "roles": roles,
+            "results": results,
+        }
+        print(canonical_json(payload))
+
+    return exit_code
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Weekly proof runner with parameterized intent and adapter selection")

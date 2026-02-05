@@ -1,51 +1,22 @@
-name: Weekly Proof
+name: agentos-weekly-proof
+
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+  push:
+    branches: [ main ]
+
 jobs:
-  weekly_proof_envoy_only:
-    runs-on: ubuntu-22.04
+  weekly-proof:
+    runs-on: ubuntu-latest
+    env:
+      PPLX_API_KEY: \${{ secrets.PPLX_API_KEY }}
+      PPLX_BASE_URL: \${{ secrets.PPLX_BASE_URL }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 1
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
-      - run: python -m pip install -U pip
-      - run: PYTHONPATH=src:src/onemind-FSM-Kernel/src python -m compileall -q src tools
-      - run: PYTHONPATH=src:src/onemind-FSM-Kernel/src python tools/weekly_proof_run.py --intent utc_date --roles envoy
-      - run: test -d store/weekly_proof/utc_date
-      - uses: actions/upload-artifact@v4
-        with:
-          name: weekly-proof-store-envoy
-          path: store/weekly_proof
-          if-no-files-found: error
-  weekly_proof_full:
-    if: ${{ secrets.PPLX_API_KEY != '' }}
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 1
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-      - run: python -m pip install -U pip
-      - run: PYTHONPATH=src:src/onemind-FSM-Kernel/src python -m compileall -q src tools
-      - env:
-          PPLX_API_KEY: ${{ secrets.PPLX_API_KEY }}
-          PPLX_BASE_URL: ${{ secrets.PPLX_BASE_URL }}
-          PPLX_MODEL: ${{ secrets.PPLX_MODEL }}
-        run: PYTHONPATH=src:src/onemind-FSM-Kernel/src python tools/weekly_proof_run.py --intent utc_date --roles envoy,scout --require-scout
-      - run: test -d store/weekly_proof/utc_date
-      - uses: actions/upload-artifact@v4
-        with:
-          name: weekly-proof-store-full
-          path: store/weekly_proof
-          if-no-files-found: error
+          python-version: '3.11'
+      - name: install
+        run: pip install -r requirements.txt
+      - name: run weekly proof
+        run: PYTHONPATH=src:src/onemind-FSM-Kernel/src python3 tools/weekly_proof_run.py --intent utc_date --roles envoy,scout --require-scout
