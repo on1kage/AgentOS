@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, Any
 from agentos.canonical import canonical_json, sha256_hex
 from agentos.adapter_registry import ADAPTERS
+from agentos.intents import intent_spec
 from agentos.execution import ExecutionSpec, canonical_inputs_manifest
 from agentos.executor import LocalExecutor
 from agentos.evidence import EvidenceBundle
@@ -24,24 +25,19 @@ def _required_env_present(env_allowlist: list[str]):
     missing = [k for k in env_allowlist if not os.environ.get(k)]
     return (len(missing) == 0, missing)
 
-def _make_spec(*, role: str, task_id: str, exec_id: str, cmd_argv: list[str], env_allowlist: list[str], cwd: str, paths_allowlist: list[str], intent_name: str) -> ExecutionSpec:
-    inputs_manifest = canonical_inputs_manifest({"intent": sha256_hex(intent_name.encode("utf-8"))})
-    return ExecutionSpec(
-        exec_id=exec_id,
-        task_id=task_id,
-        role=role,
-        action="weekly_proof",
-        kind="shell",
-        cmd_argv=list(cmd_argv),
-        cwd=cwd,
-        env_allowlist=list(env_allowlist),
-        timeout_s=60,
-        inputs_manifest_sha256=inputs_manifest,
-        paths_allowlist=list(paths_allowlist),
-        note=f"weekly_proof intent={intent_name} role={role}",
-    )
+def _make_spec(*, role: str, task_id: str, exec_id: str, cmd_argv: list[str], env_allowlist: list[str], cwd: str, paths_allowlist: list[str], intent_name: str, intent_spec_obj: dict) -> ExecutionSpec:
+    intent_name_sha = sha256_hex(intent_name.encode("utf-8"))
+    intent_spec_sha = sha256_hex(canonical_json(intent_spec_obj).encode("utf-8"))
+    inputs_manifest = canonical_inputs_manifest({
+        "intent/name": intent_name_sha,
+        "intent/spec": intent_spec_sha,
+    })
+    return ExecutionSpec(exec_id=exec_id, task_id=task_id, role=role, action="weekly_proof", kind="shell",
+                         cmd_argv=list(cmd_argv), cwd=cwd, env_allowlist=list(env_allowlist),
+                         timeout_s=60, inputs_manifest_sha256=inputs_manifest, paths_allowlist=list(paths_allowlist),
+                         note=f"weekly_proof intent={intent_name} role={role}")
 
-def _run_role(*, intent_name: str, run_id: str, role: str, store_root: Path, cwd: str, paths_allowlist: list[str], require_env: bool) -> Dict[str, Any]:
+def _run_role(*, intent_name: str, intent_spec_obj: dict, run_id: str, role: str, store_root: Path, cwd: str, paths_allowlist: list[str], require_env: bool) -> Dict[str, Any]:
     adapter = ADAPTERS.get(role)
     cmd = list(adapter["cmd"]) + [intent_name]
     env_allowlist = adapter["env_allowlist"]
@@ -50,11 +46,10 @@ def _run_role(*, intent_name: str, run_id: str, role: str, store_root: Path, cwd
         if require_env:
             raise RuntimeError(f"missing_required_env_for_role:{role}:{','.join(missing)}")
         else:
-            return {"ok": False, "skipped": True, "reason": "missing_required_env", "missing_env": missing}
-
+            return {'ok': False, 'skipped': True, 'reason': 'missing_required_env', 'missing_env': missing}
     task_id = f"weekly_{role}"
     exec_id = run_id
-    spec = _make_spec(role=role, task_id=task_id, exec_id=exec_id, cmd_argv=cmd, env_allowlist=env_allowlist, cwd=cwd, paths_allowlist=paths_allowlist, intent_name=intent_name)
+    spec = _make_spec(role=role, task_id=task_id, exec_id=exec_id, cmd_argv=cmd, env_allowlist=env_allowlist, cwd=cwd, paths_allowlist=paths_allowlist, intent_name=intent_name, intent_spec_obj=intent_spec_obj)
     executor = LocalExecutor()
     r = executor.run(spec)
     evidence = EvidenceBundle().write_bundle(spec=spec, stdout=r.stdout, stderr=r.stderr, outputs={}, outcome=ExecutionOutcome.SUCCEEDED if r.exit_code == 0 else ExecutionOutcome.FAILED, reason="weekly_proof")
@@ -77,10 +72,16 @@ def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
     exit_code = 0
 
     for intent in intents:
+        try:
+            spec = intent_spec(intent)
+        except Exception as e:
+            raise SystemExit(str(e))
+
         store_root = _store_root(intent, run_id)
         if store_root.exists():
             shutil.rmtree(store_root)
         store_root.mkdir(parents=True, exist_ok=True)
+        (store_root/'evidence').mkdir(parents=True, exist_ok=True)
         cwd = str(Path.cwd())
         paths_allowlist = [str(store_root.resolve()), cwd]
         results: Dict[str, Any] = {}
@@ -89,22 +90,17 @@ def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
             require_env = True
             if role == "scout" and not require_scout:
                 require_env = False
-            res = _run_role(intent_name=intent, run_id=run_id, role=role, store_root=store_root, cwd=cwd, paths_allowlist=paths_allowlist, require_env=require_env)
+            res = _run_role(intent_name=intent, intent_spec_obj=spec, run_id=run_id, role=role,
+                            store_root=store_root, cwd=cwd, paths_allowlist=paths_allowlist,
+                            require_env=require_env)
             results[role] = res
             if role == "envoy" and not res.get("ok", False):
                 exit_code = 2
-            if role == "scout":
-                if not res.get("skipped", False) and not res.get("ok", False):
-                    exit_code = 3
+            if role == "scout" and not res.get("ok", False) and not res.get("skipped", False):
+                exit_code = 3
 
-        payload = {
-            "schema_version": SCHEMA_VERSION,
-            "run_id": run_id,
-            "store_root": str(store_root),
-            "intent": intent,
-            "roles": roles,
-            "results": results,
-        }
+        payload = {"schema_version": SCHEMA_VERSION, "run_id": run_id, "store_root": str(store_root),
+                   "intent": intent, "roles": roles, "results": results}
         print(canonical_json(payload))
 
     return exit_code
