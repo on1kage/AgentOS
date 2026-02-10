@@ -1,28 +1,26 @@
-import os
-import sys
-from datetime import datetime, timezone
-from agentos.canonical import canonical_json
+import sys, os, json
+from pathlib import Path
 
-def _model() -> str:
-    return os.getenv("OLLAMA_MODEL", "system_clock_utc")
+# === ARGUMENT PARSING ===
+intent = sys.argv[1] if len(sys.argv) > 1 else 'utc_date'
+run_id = sys.argv[2] if len(sys.argv) > 2 else 'local'
+store_root = os.environ.get('STORE_ROOT', os.getcwd())
+evidence_dir = Path(store_root)/'evidence'
+evidence_dir.mkdir(parents=True, exist_ok=True)
 
-def main() -> int:
-    prompt = "Return today's UTC date as a single ISO date string only (YYYY-MM-DD)."
-    expected = datetime.now(timezone.utc).date().isoformat()
+# === PROBE EXECUTION ===
+exit_code = 0
+outputs = {}
 
-    out = {
-        "schema_version": "envoy-intel/v1",
-        "model": _model(),
-        "prompt": prompt,
-        "answer": expected,
-        "expected_utc_date": expected,
-        "answer_raw": expected,
-        "raw_keys": ["system_clock_utc"],
-    }
+try:
+    outputs['utc_date'] = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%d')
+except Exception as e:
+    outputs['error'] = str(e)
+    exit_code = 1
 
-    sys.stdout.write(canonical_json(out))
-    sys.stdout.write("\n")
-    return 0
+# === WRITE EVIDENCE ===
+evidence_file = evidence_dir/f'envoy_{intent}_{run_id}.json'
+with open(evidence_file, 'w') as f:
+    json.dump({'intent': intent, 'run_id': run_id, 'outputs': outputs, 'exit_code': exit_code}, f, indent=2)
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+sys.exit(exit_code)

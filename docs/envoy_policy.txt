@@ -1,0 +1,58 @@
+Envoy Policy
+============
+
+Purpose
+-------
+Envoy is the deterministic local execution role. It is used to produce outputs that are machine-verifiable without relying on external networks or non-deterministic services.
+
+Authoritative Time Source
+-------------------------
+Envoy uses the system UTC clock as the sole authoritative time source.
+
+Rule: Any "current date/time" value returned by Envoy must be derived from the local system clock in UTC.
+Rule: Envoy must not consult external services for time or date.
+Rule: Envoy must not rely on an LLM or any remote inference endpoint for time or date.
+
+External Dependencies
+---------------------
+Envoy must have no external data dependencies for proofs that are intended to be hermetic.
+
+Allowed
+-------
+- Local filesystem reads within explicitly allowlisted paths.
+- Local process execution under argv-only execution.
+- Local system clock in UTC.
+- Local environment variables if and only if explicitly allowlisted by the adapter registry and required for the specific Envoy intent.
+
+Disallowed
+----------
+- Network access for proof intents intended to be hermetic.
+- Remote APIs for obtaining truth data (time, date, facts).
+- Any fallback to simulated outputs.
+
+Adapter Registry Contract
+-------------------------
+For each Envoy adapter:
+- cmd must be argv-form (list of strings), executed without a shell.
+- env_allowlist must enumerate required variables by name only.
+- If env_allowlist is empty for a given Envoy intent, the Envoy proof must be runnable in CI without secrets.
+
+Evidence Contract
+-----------------
+Every Envoy run must produce an evidence bundle via EvidenceBundle.write_bundle including:
+- exec_spec.json
+- stdout.txt
+- stderr.txt
+- manifest.sha256.json
+- run_summary.json
+- outputs/parsed.json when stdout is valid JSON
+
+Failure Semantics
+-----------------
+- Non-zero exit code must be recorded as FAILED and captured with full stdout/stderr.
+- Missing required env for Envoy must be a hard failure (do not skip Envoy).
+
+Current Implementation Notes
+----------------------------
+- The Envoy weekly proof probe returns the system UTC date deterministically.
+- The adapter registry for Envoy sets env_allowlist to [] for the weekly proof path to ensure CI can always run Envoy.

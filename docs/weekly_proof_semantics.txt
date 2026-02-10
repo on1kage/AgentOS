@@ -1,0 +1,53 @@
+Weekly Proof Semantics
+======================
+
+Purpose
+-------
+Define canonical meanings for weekly proof outcomes and enforce evidence structure.
+
+Outcome Definitions
+-------------------
+- SUCCEEDED:
+  - Execution completed without error.
+  - Evidence bundle fully written with expected files.
+  - Envoy or Scout returned exit code 0.
+- FAILED:
+  - Execution completed but exit code non-zero.
+  - Evidence bundle may contain stdout/stderr for debugging.
+- REJECTED:
+  - Execution spec could not be constructed (pre-run failure).
+  - Failure due to idempotency, missing required environment, or explicit preflight block.
+
+Evidence Directory Contract
+---------------------------
+- Root: `store/weekly_proof/<intent>/<run_id>/`
+- Role subdirectory: `evidence/weekly_<role>/`
+- Required files per role:
+  - `exec_spec.json`
+  - `stdout.txt`
+  - `stderr.txt`
+  - `manifest.sha256.json`
+  - `run_summary.json`
+  - Optional `outputs/parsed.json` if stdout is JSON
+- Verification bundles stored at: `evidence/verify/<spec_sha>/manifest.sha256.json`
+- Rejections stored at: `evidence/rejections/<rej_id>/rejection.json`
+
+Fail-Closed Semantics
+---------------------
+- CI must fail if any required evidence file is missing.
+- Exit codes:
+  - Envoy failure → exit 2
+  - Scout failure (if required) → exit 3
+  - Skipped Scout → exit 0
+
+Adapter Registry Mapping
+------------------------
+- Each role’s `cmd` must be argv-only.
+- Each role’s `env_allowlist` must be explicit.
+- Envoy env_allowlist may be empty for hermetic tasks.
+- Scout env_allowlist must be present for secrets.
+
+Intent-Awareness
+----------------
+- Runner supports parameterized `--intent <name>` for separate proof paths.
+- Each intent has its own run_id and evidence directory.

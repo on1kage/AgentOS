@@ -10,6 +10,15 @@ from agentos.pipeline import Step, PipelineResult, verify_plan
 from agentos.evidence import EvidenceBundle
 from agentos.store_fs import FSStore
 
+# missing canonical imports for nl_translator_v1 and compiler paths
+from agentos.intent_compiler_contract import CompilationRefusal
+from agentos.proposed_intent_v1 import parse_proposed_intent_v1
+from agentos.intent_classes import ROLE_FOR_MODE, ACTION_FOR_MODE
+from agentos.research_or_local_intent_compiler import ResearchOrLocalIntentCompiler
+from agentos.intent_compiler_evidence_validator import verify_compiler_evidence
+
+compiler = ResearchOrLocalIntentCompiler()
+
 def _payload_unknown_keys(payload: dict, allowed: Set[str]) -> List[str]:
     if not isinstance(payload, dict):
         return ["__payload_not_dict__"]
@@ -149,6 +158,9 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
     ie.write_intent_ingest(intent_text, submitted_at_utc=submitted_at_utc, submitter_id=None)
 
     intent_source = os.environ.get("AGENTOS_INTENT_SOURCE")
+    # plan_spec is only permitted for planspec_v1; all other paths must not carry it past entry contract
+    if intent_source != "planspec_v1":
+        payload.pop("plan_spec", None)
     if intent_source == "planspec_v1":
         ps = payload.get("plan_spec")
         payload.pop("plan_spec", None)
@@ -250,6 +262,7 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
         }
         payload["intent_sha256"] = intent_sha256
         payload["intent_compilation_manifest_sha256"] = rb["manifest_sha256"]
+        payload.pop("plan_spec", None)  # required: nl_translator path must not leak plan_spec into exit contract
         exit_chk = _fail_closed_payload_contract(
             stage="payload_contract_exit",
             payload=payload,
@@ -385,6 +398,7 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
     )
     payload["intent_sha256"] = intent_sha256
     payload["intent_compilation_manifest_sha256"] = nrec.manifest_sha256
+    payload.pop("plan_spec", None)  # required: normalizer path must not leak plan_spec into exit contract
 
     manifest_path = Path(nrec.bundle_dir) / "manifest.sha256.json"
     if not manifest_path.exists():

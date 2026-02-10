@@ -39,6 +39,8 @@ def _make_spec(*, role: str, task_id: str, exec_id: str, cmd_argv: list[str], en
 
 def _run_role(*, intent_name: str, intent_spec_obj: dict, run_id: str, role: str, store_root: Path, cwd: str, paths_allowlist: list[str], require_env: bool) -> Dict[str, Any]:
     adapter = ADAPTERS.get(role)
+    if adapter is None:
+        raise SystemExit(f"unknown_role:{role}")
     cmd = list(adapter["cmd"]) + [intent_name]
     env_allowlist = adapter["env_allowlist"]
     ok_env, missing = _required_env_present(env_allowlist)
@@ -46,13 +48,18 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, run_id: str, role: str
         if require_env:
             raise RuntimeError(f"missing_required_env_for_role:{role}:{','.join(missing)}")
         else:
-            return {'ok': False, 'skipped': True, 'reason': 'missing_required_env', 'missing_env': missing}
+            return {"ok": False, "skipped": True, "reason": "missing_required_env", "missing_env": missing}
     task_id = f"weekly_{role}"
     exec_id = run_id
     spec = _make_spec(role=role, task_id=task_id, exec_id=exec_id, cmd_argv=cmd, env_allowlist=env_allowlist, cwd=cwd, paths_allowlist=paths_allowlist, intent_name=intent_name, intent_spec_obj=intent_spec_obj)
     executor = LocalExecutor()
     r = executor.run(spec)
-    evidence = EvidenceBundle().write_bundle(spec=spec, stdout=r.stdout, stderr=r.stderr, outputs={}, outcome=ExecutionOutcome.SUCCEEDED if r.exit_code == 0 else ExecutionOutcome.FAILED, reason="weekly_proof")
+    evidence_root = store_root / "evidence"
+    evidence = EvidenceBundle(root=str(evidence_root)).write_bundle(
+        spec=spec, stdout=r.stdout, stderr=r.stderr, outputs={},
+        outcome=ExecutionOutcome.SUCCEEDED if r.exit_code == 0 else ExecutionOutcome.FAILED,
+        reason="weekly_proof"
+    )
     return {
         "ok": r.exit_code == 0,
         "skipped": False,
@@ -61,7 +68,6 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, run_id: str, role: str
         "spec_sha256": evidence.get("spec_sha256"),
         "manifest_sha256": evidence.get("manifest_sha256"),
     }
-
 def _parse_roles(s: str):
     return [v.strip() for v in (s or "").split(",") if v.strip()]
 

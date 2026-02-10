@@ -35,7 +35,7 @@ class IntentEvidence:
         er = evidence_root
         if not isinstance(er, str) or not er:
             er = str(store.root / "evidence")
-        self._eb = EvidenceBundle(root=Path('store') / 'weekly_proof' / intent_name / run_id / 'evidence')
+        self._eb = EvidenceBundle(root=str(er))
 
     def write_intent_ingest(
         self,
