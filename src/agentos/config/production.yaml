@@ -1,0 +1,3 @@
+mode: production
+output_dir: store/outputs/production
+evidence_dir: store/evidence/verify
