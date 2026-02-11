@@ -20,3 +20,11 @@ jobs:
         run: pip install -r requirements.txt
       - name: run weekly proof
         run: PYTHONPATH=src:src/onemind-FSM-Kernel/src python3 tools/weekly_proof_run.py --intent utc_date --roles envoy,scout --require-scout
+      - name: validate evidence hashes
+        run: |
+          set -euo pipefail
+          dirs=(store/weekly_proof/utc_date/*/evidence)
+          if [ "${#dirs[@]}" -eq 0 ]; then exit 1; fi
+          for d in "${dirs[@]}"; do
+            PYTHONPATH=src:src/onemind-FSM-Kernel/src python3 tools/validate_evidence.py --contract ci/evidence_contract.v1.json --evidence-root "$d"
+          done
