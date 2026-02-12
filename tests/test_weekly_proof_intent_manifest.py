@@ -22,11 +22,9 @@ def test_weekly_proof_inputs_manifest_binds_intent_spec():
     es = mod._make_spec(
         role="envoy",
         task_id="weekly_envoy",
-        exec_id="1",
         cmd_argv=["echo", "ok"],
         env_allowlist=[],
         cwd=str(Path.cwd()),
-        paths_allowlist=[str(Path.cwd())],
         intent_name="utc_date",
         intent_spec_obj=ispec,
     )
@@ -50,22 +48,18 @@ def test_weekly_proof_manifest_changes_if_spec_changes():
     es1 = mod._make_spec(
         role="envoy",
         task_id="weekly_envoy",
-        exec_id="1",
         cmd_argv=["echo", "ok"],
         env_allowlist=[],
         cwd=str(Path.cwd()),
-        paths_allowlist=[str(Path.cwd())],
         intent_name="utc_date",
         intent_spec_obj=ispec,
     )
     es2 = mod._make_spec(
         role="envoy",
         task_id="weekly_envoy",
-        exec_id="1",
         cmd_argv=["echo", "ok"],
         env_allowlist=[],
         cwd=str(Path.cwd()),
-        paths_allowlist=[str(Path.cwd())],
         intent_name="utc_date",
         intent_spec_obj=ispec2,
     )
