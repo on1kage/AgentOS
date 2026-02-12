@@ -100,6 +100,7 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
         "bundle_dir": evidence.get("bundle_dir"),
         "spec_sha256": evidence.get("spec_sha256"),
         "manifest_sha256": evidence.get("manifest_sha256"),
+        "adapter_version": adapter["adapter_version"],
     }
 
 def _parse_roles(s: str):
