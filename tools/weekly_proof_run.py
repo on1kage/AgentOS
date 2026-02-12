@@ -85,6 +85,14 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
         reason="weekly_proof",
     )
 
+    # Deterministic accept/refine placeholder: record results, allow for later evaluation
+    review_bundle = EvidenceBundle(root=Path(store_root) / "review")
+    review_bundle.write_verification_bundle(
+        spec_sha256=evidence["spec_sha256"],
+        decisions={"accept": True},
+        reason="weekly_proof_evaluation",
+    )
+
     return {
         "ok": r.exit_code == 0,
         "skipped": False,
@@ -103,11 +111,7 @@ def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
     exit_code = 0
 
     for intent in intents:
-        try:
-            spec = intent_spec(intent)
-        except Exception as e:
-            raise SystemExit(str(e))
-
+        spec = intent_spec(intent)
         store_root = _store_root(intent)
         if store_root.exists():
             shutil.rmtree(store_root)

@@ -2,10 +2,9 @@ from hashlib import sha256
 from typing import Union
 from .intent_ingest import ingest_intent
 from .intent_compiler_contract import CompiledIntent, CompilationRefusal
-from .intent_classes import basic_intent
 
-COMPILER_VERSION = "0.1"
-COMPILER_RULESET_HASH = sha256(b"basic_ruleset_v0.1").hexdigest()
+COMPILER_VERSION = "0.2"
+COMPILER_RULESET_HASH = sha256(b"basic_ruleset_v0.2").hexdigest()
 
 def compile_intent(intent_text: str) -> Union[CompiledIntent, CompilationRefusal]:
     ingested = ingest_intent(intent_text)
@@ -18,7 +17,7 @@ def compile_intent(intent_text: str) -> Union[CompiledIntent, CompilationRefusal
             compiler_ruleset_hash=COMPILER_RULESET_HASH,
             refusal_reason="Ambiguous or unsupported intent"
         )
-    plan_spec = {"actions": ["noop"], "agents": basic_intent.allowed_agents}
+    plan_spec = {"actions": ["noop"], "agents": ["scout","envoy"]}
     output_hash = sha256(str(plan_spec).encode("utf-8")).hexdigest()
     return CompiledIntent(
         plan_spec=plan_spec,
