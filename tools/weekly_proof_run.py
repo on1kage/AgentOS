@@ -107,6 +107,7 @@ def _parse_roles(s: str):
     return [v.strip() for v in (s or "").split(",") if v.strip()]
 
 def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
+    run_id = "weekly_proof"
     intents = [i.strip() for i in intent_name.split(",") if i.strip()]
     roles = _parse_roles(roles_csv)
     exit_code = 0
@@ -150,7 +151,8 @@ def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
         }
 
         print(canonical_json(payload))
-
+        artifact_path = Path('store/weekly_proof/artifacts') / f'{intent}_{run_id}.json'
+        artifact_path.write_text(canonical_json(payload), encoding='utf-8')
     return exit_code
 
 if __name__ == "__main__":
