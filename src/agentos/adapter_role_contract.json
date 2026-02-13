@@ -1,0 +1,29 @@
+{
+  "contract_version": "1.0.0-weekly-proof",
+  "envoy": {
+    "adapter_version": "1.0.0",
+    "allowed_actions": [
+      "deterministic_local_execution",
+      "evidence_capture"
+    ],
+    "output_schema_sha256": "efab47c7fcc7c6c5730ee0fcbe2b40ae458fd2468f9fb4231d364dd0481d1a5a",
+    "prohibited_actions": [
+      "internet_access",
+      "unauthorized_actions",
+      "capability_claims_without_proof"
+    ]
+  },
+  "scout": {
+    "adapter_version": "1.0.0",
+    "allowed_actions": [
+      "external_research",
+      "source_collection"
+    ],
+    "output_schema_sha256": "53aedd17a3aa75947468688c910bff805062de0753a10de4053f7dcbe66569ba",
+    "prohibited_actions": [
+      "local_execution",
+      "state_mutation",
+      "unauthorized_actions"
+    ]
+  }
+}
