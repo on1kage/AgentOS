@@ -1,20 +1,18 @@
-from agentos.legacy_backup.research_or_local_intent_compiler import CompilationRefusal
 import os
-from agentos.agent_pipeline_entry import execute_agent_pipeline
+from agentos.plan_runner_full_pipeline import run_full_pipeline
 
-def test_morpheus_live_nl_execution():
-    os.environ["AGENTOS_INTENT_SOURCE"] = "nl_translator_v1"
-    os.environ["AGENTOS_ALLOW_LEGACY_NL_TRANSLATOR"] = "1"
-    os.environ["AGENTOS_NL_TRANSLATOR_INPUT_JSON"] = '{"mode":"research","query":"transformers","max_results":3}'
+def test_planspec_live_execution():
+    os.environ["AGENTOS_INTENT_SOURCE"] = "planspec_v1"
     try:
-        res = execute_agent_pipeline("find papers about transformers")
+        payload = {
+            "intent_text": "find papers about transformers",
+            "plan_spec": {"role": "scout", "action": "external_research", "metadata": {"query": "transformers", "max_results": 3}},
+        }
+        res = run_full_pipeline(payload)
         assert res.ok is True
         assert isinstance(res.decisions, list)
-        # Optional: validate first step role/action matches expected mapping
         first_decision = res.decisions[0]
         assert first_decision["role"] == "scout"
         assert first_decision["action"] == "external_research"
     finally:
         os.environ.pop("AGENTOS_INTENT_SOURCE", None)
-        os.environ.pop("AGENTOS_ALLOW_LEGACY_NL_TRANSLATOR", None)
-        os.environ.pop("AGENTOS_NL_TRANSLATOR_INPUT_JSON", None)

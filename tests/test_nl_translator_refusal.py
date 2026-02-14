@@ -1,29 +1,37 @@
 import os
 import tempfile
-from agentos.agent_pipeline_entry import execute_agent_pipeline
+from agentos.plan_runner_full_pipeline import run_full_pipeline
 
-def _run_with_temp_evidence(intent_source, payload_json, intent_text):
+def _run_with_temp_store(payload):
     with tempfile.TemporaryDirectory() as tmpdir:
-        os.environ["AGENTOS_INTENT_SOURCE"] = intent_source
-        os.environ["AGENTOS_NL_TRANSLATOR_INPUT_JSON"] = payload_json
+        os.environ["AGENTOS_INTENT_SOURCE"] = "planspec_v1"
         os.environ["AGENTOS_STORE_ROOT"] = tmpdir
-        os.environ["AGENTOS_ALLOW_LEGACY_NL_TRANSLATOR"] = "1"
         try:
-            return execute_agent_pipeline(intent_text)
+            return run_full_pipeline(payload)
         finally:
             os.environ.pop("AGENTOS_INTENT_SOURCE", None)
-            os.environ.pop("AGENTOS_NL_TRANSLATOR_INPUT_JSON", None)
             os.environ.pop("AGENTOS_STORE_ROOT", None)
-            os.environ.pop("AGENTOS_ALLOW_LEGACY_NL_TRANSLATOR", None)
 
-def test_nl_translator_disabled_refusal():
-    res = _run_with_temp_evidence("nl_translator_v1", "", "any intent text")
+def test_planspec_refusal_missing_planspec():
+    res = _run_with_temp_store({"intent_text": "any intent text"})
     assert res.ok is False
-    assert res.decisions[0]["stage"] == "nl_translator_refusal"
-    assert res.decisions[0]["reason"] == "refusal:nl_translator:disabled"
+    assert res.decisions[0]["stage"] == "planspec_refusal"
+    assert res.decisions[0]["reason"] == "planspec_invalid:not_a_dict"
 
-def test_nl_translator_invalid_json():
-    res = _run_with_temp_evidence("nl_translator_v1", "{bad json}", "any intent text")
+def test_planspec_refusal_unknown_keys():
+    res = _run_with_temp_store({
+        "intent_text": "any intent text",
+        "plan_spec": {"role": "scout", "action": "external_research", "wat": 1, "metadata": {}},
+    })
     assert res.ok is False
-    assert res.decisions[0]["stage"] == "nl_translator_refusal"
-    assert res.decisions[0]["reason"] == "refusal:nl_translator:invalid_json"
+    assert res.decisions[0]["stage"] == "planspec_refusal"
+    assert res.decisions[0]["reason"] == "planspec_invalid:unknown_keys"
+
+def test_planspec_refusal_invalid_metadata():
+    res = _run_with_temp_store({
+        "intent_text": "any intent text",
+        "plan_spec": {"role": "scout", "action": "external_research", "metadata": "nope"},
+    })
+    assert res.ok is False
+    assert res.decisions[0]["stage"] == "planspec_refusal"
+    assert res.decisions[0]["reason"] == "planspec_invalid:metadata_not_dict"
