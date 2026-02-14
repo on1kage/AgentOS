@@ -32,7 +32,7 @@ def _make_spec(*, role: str, task_id: str, cmd_argv: list[str], env_allowlist: l
         exec_id="weekly_proof",
         task_id=task_id,
         role=role,
-        action="weekly_proof",
+        action="deterministic_local_execution",
         kind="shell",
         cmd_argv=list(cmd_argv),
         cwd=cwd,

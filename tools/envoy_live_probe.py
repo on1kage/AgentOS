@@ -6,7 +6,7 @@ from datetime import datetime
 
 adapter_role = "envoy"
 adapter_version = "1.0.0"
-action_class = "weekly_proof"
+action_class = "deterministic_local_execution"
 
 intent = sys.argv[1] if len(sys.argv) > 1 else "utc_date"
 run_id = sys.argv[2] if len(sys.argv) > 2 else "local"
