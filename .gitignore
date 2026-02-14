@@ -17,3 +17,12 @@ __pycache__/
 evidence/
 
 # AgentOS runtime evidence bundles
+
+# Local virtualenv
+.venv/
+
+# CI scratch
+.ci_test_env/
+
+# Backups
+backup_*/

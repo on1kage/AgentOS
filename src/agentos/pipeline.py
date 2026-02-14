@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from agentos.evidence import EvidenceBundle
 from agentos.canonical import sha256_hex, canonical_json
 from agentos.policy import decide
+from agentos.adapter_role_contract_checker import contract_sha256
 from agentos.store_fs import FSStore, EventRef
 from agentos.task import Task
 
@@ -141,7 +142,7 @@ def verify_task(store: FSStore, task: Task) -> TaskVerifyResult:
             verification_manifest_sha256=bundle['manifest_sha256'],
         )
 
-    verify_spec = sha256_hex(canonical_json({'inputs_manifest_sha256': ims, 'role': task.role, 'action': task.action}).encode('utf-8'))
+    verify_spec = sha256_hex(canonical_json({'inputs_manifest_sha256': ims, 'role': task.role, 'action': task.action, 'adapter_role_contract_sha256': contract_sha256()}).encode('utf-8'))
 
     bundle = EvidenceBundle(root=_evidence_root_for_store(store)).write_verification_bundle(
         spec_sha256=verify_spec,

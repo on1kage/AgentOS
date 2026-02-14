@@ -30,6 +30,7 @@ class EventType(str, Enum):
     RUN_STARTED = "RUN_STARTED"
     RUN_SUCCEEDED = "RUN_SUCCEEDED"
     RUN_FAILED = "RUN_FAILED"
+    TASK_EVALUATED = "TASK_EVALUATED"
 
 
 # Allowed transitions are keyed by (current_state, event_type) -> next_state.
@@ -47,10 +48,12 @@ _ALLOWED: Dict[Tuple[TaskState, EventType], TaskState] = {
     (TaskState.DISPATCHED, EventType.RUN_STARTED): TaskState.RUNNING,
     (TaskState.RUNNING, EventType.RUN_SUCCEEDED): TaskState.COMPLETED,
     (TaskState.RUNNING, EventType.RUN_FAILED): TaskState.FAILED,
+
+    (TaskState.COMPLETED, EventType.TASK_EVALUATED): TaskState.EVALUATED,
 }
 
 _TERMINAL: Tuple[TaskState, ...] = (
-    TaskState.COMPLETED,
+    TaskState.EVALUATED,
     TaskState.FAILED,
 )
 

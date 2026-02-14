@@ -11,6 +11,7 @@ class TaskState(str, Enum):
     DISPATCHED = "DISPATCHED"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
+    EVALUATED = "EVALUATED"
     FAILED = "FAILED"
 
 
