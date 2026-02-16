@@ -13,6 +13,7 @@ from agentos.evidence import EvidenceBundle
 from agentos.outcome import ExecutionOutcome
 from agentos.store_fs import FSStore
 from agentos.evaluation import evaluate_task
+from agentos.fsm import rebuild_task_state
 from agentos.policy import decide
 from agentos.adapter_role_contract_checker import contract_sha256
 
@@ -185,6 +186,21 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
 
     decision = "accept" if r.exit_code == 0 else "refine"
     ev = evaluate_task(store=ev_store, evidence_root=str(evidence_root), task_id=task_id, decision=decision, note="weekly_proof_evaluation")
+
+    # Fail-closed: weekly_proof must prove deterministic FSM replay reaches EVALUATED.
+    snap = rebuild_task_state(ev_store, task_id)
+    if str(snap.get("state")) != "EVALUATED":
+        raise RuntimeError(f"weekly_proof_fsm_not_evaluated:{snap.get('state')}")
+
+    # Fail-closed: evaluation manifest must match what was recorded in TASK_EVALUATED.
+    evs = list(ev_store.list_events(task_id))
+    te = [e for e in evs if str(e.get("type")) == "TASK_EVALUATED"]
+    if not te:
+        raise RuntimeError("weekly_proof_missing_TASK_EVALUATED")
+    body = dict(te[-1].get('body') or {})
+    if str(body.get('evaluation_manifest_sha256')) != str(ev.get('evaluation_manifest_sha256')):
+        raise RuntimeError("weekly_proof_evaluation_manifest_mismatch")
+
 
     return {
         "ok": r.exit_code == 0,
