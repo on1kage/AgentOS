@@ -58,6 +58,9 @@ def validate_output_schema(role: str, payload: dict) -> bool:
         return False
     if payload.get("adapter_role") != role:
         return False
-    if not validate_role_action(role, payload.get("action_class")):
+    action_class = payload.get("action_class")
+    if not isinstance(action_class, str) or not action_class:
+        return False
+    if not validate_role_action(role, action_class):
         return False
     return True

@@ -1,4 +1,5 @@
 {
+  "contract_binding_sha256": "ea5a9bdda399eb09761d5d1035a93a315f335adb4c8b07a69603e5ed2d3a4b2a",
   "contract_version": "1.0.0-weekly-proof",
   "envoy": {
     "adapter_version": "1.0.0",
@@ -6,7 +7,7 @@
       "deterministic_local_execution",
       "evidence_capture"
     ],
-    "output_schema_sha256": "092d141c9ecaf96e175b7762ebe7e94d0012f1eec3affe558fad6d9008ac30e2",
+    "output_schema_sha256": "42b46719893e5e072c59b64ecb6746f9a7d8419fb72edccf15761425e550fe49",
     "prohibited_actions": [
       "internet_access",
       "unauthorized_actions",
@@ -19,7 +20,7 @@
       "external_research",
       "source_collection"
     ],
-    "output_schema_sha256": "092d141c9ecaf96e175b7762ebe7e94d0012f1eec3affe558fad6d9008ac30e2",
+    "output_schema_sha256": "42b46719893e5e072c59b64ecb6746f9a7d8419fb72edccf15761425e550fe49",
     "prohibited_actions": [
       "local_execution",
       "state_mutation",

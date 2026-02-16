@@ -11,6 +11,8 @@ from agentos.execution import ExecutionSpec, canonical_inputs_manifest
 from agentos.executor import LocalExecutor
 from agentos.evidence import EvidenceBundle
 from agentos.outcome import ExecutionOutcome
+from agentos.store_fs import FSStore
+from agentos.evaluation import evaluate_task
 
 SCHEMA_VERSION = "agentos-weekly-proof/v1"
 
@@ -42,6 +44,93 @@ def _make_spec(*, role: str, task_id: str, cmd_argv: list[str], env_allowlist: l
         paths_allowlist=[cwd],
         note=f"weekly_proof intent={intent_name} role={role}",
     )
+
+def _write_run_summary(evidence_root: Path, task_id: str, exec_id: str, manifest_sha256: str) -> None:
+    d = evidence_root / task_id / exec_id
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / "run_summary.json"
+    p.write_text(canonical_json({"manifest_sha256": manifest_sha256}), encoding="utf-8")
+
+def _emit_minimal_task_events(store: FSStore, spec: ExecutionSpec, ok: bool, exit_code: int, manifest_sha256: str) -> None:
+    task_id = spec.task_id
+    created_payload = {
+        "exec_id": spec.exec_id,
+        "kind": spec.kind,
+        "cmd_argv": list(spec.cmd_argv),
+        "cwd": spec.cwd,
+        "env_allowlist": list(spec.env_allowlist),
+        "timeout_s": int(spec.timeout_s),
+        "inputs_manifest_sha256": spec.inputs_manifest_sha256,
+        "paths_allowlist": list(spec.paths_allowlist),
+        "note": spec.note,
+    }
+    store.append_event(
+        task_id,
+        "TASK_CREATED",
+        {
+            "role": spec.role,
+            "action": spec.action,
+            "payload": created_payload,
+            "attempt": 0,
+        },
+    )
+    store.append_event(
+        task_id,
+        "TASK_VERIFIED",
+        {
+            "role": spec.role,
+            "action": spec.action,
+            "reason": "allow:authorized",
+            "inputs_manifest_sha256": spec.inputs_manifest_sha256,
+            "attempt": 0,
+        },
+    )
+    store.append_event(
+        task_id,
+        "TASK_DISPATCHED",
+        {
+            "role": spec.role,
+            "action": spec.action,
+            "attempt": 0,
+            "inputs_manifest_sha256": spec.inputs_manifest_sha256,
+        },
+    )
+    store.append_event(
+        task_id,
+        "RUN_STARTED",
+        {
+            "role": spec.role,
+            "action": spec.action,
+            "exec_id": spec.exec_id,
+            "spec_sha256": sha256_hex(spec.to_canonical_json().encode("utf-8")),
+        },
+    )
+    if ok:
+        store.append_event(
+            task_id,
+            "RUN_SUCCEEDED",
+            {
+                "role": spec.role,
+                "action": spec.action,
+                "exec_id": spec.exec_id,
+                "spec_sha256": sha256_hex(spec.to_canonical_json().encode("utf-8")),
+                "exit_code": int(exit_code),
+                "manifest_sha256": manifest_sha256,
+            },
+        )
+    else:
+        store.append_event(
+            task_id,
+            "RUN_FAILED",
+            {
+                "role": spec.role,
+                "action": spec.action,
+                "exec_id": spec.exec_id,
+                "spec_sha256": sha256_hex(spec.to_canonical_json().encode("utf-8")),
+                "exit_code": int(exit_code),
+                "manifest_sha256": manifest_sha256,
+            },
+        )
 
 def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root: Path, cwd: str, require_env: bool) -> Dict[str, Any]:
     adapter = ADAPTERS.get(role)
@@ -76,22 +165,22 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
     evidence_root = store_root / "evidence"
     evidence_root.mkdir(parents=True, exist_ok=True)
 
+    outcome = ExecutionOutcome.SUCCEEDED if r.exit_code == 0 else ExecutionOutcome.FAILED
     evidence = EvidenceBundle(root=str(evidence_root)).write_bundle(
         spec=spec,
         stdout=r.stdout,
         stderr=r.stderr,
         outputs={},
-        outcome=ExecutionOutcome.SUCCEEDED if r.exit_code == 0 else ExecutionOutcome.FAILED,
+        outcome=outcome,
         reason="weekly_proof",
     )
 
-    # Deterministic accept/refine placeholder: record results, allow for later evaluation
-    review_bundle = EvidenceBundle(root=Path(store_root) / "review")
-    review_bundle.write_verification_bundle(
-        spec_sha256=evidence["spec_sha256"],
-        decisions={"accept": True},
-        reason="weekly_proof_evaluation",
-    )
+    _write_run_summary(evidence_root, task_id, spec.exec_id, str(evidence.get("manifest_sha256")))
+    ev_store = FSStore(str(store_root / "events"))
+    _emit_minimal_task_events(ev_store, spec, bool(r.exit_code == 0), int(r.exit_code), str(evidence.get("manifest_sha256")))
+
+    decision = "accept" if r.exit_code == 0 else "refine"
+    ev = evaluate_task(store=ev_store, evidence_root=str(evidence_root), task_id=task_id, decision=decision, note="weekly_proof_evaluation")
 
     return {
         "ok": r.exit_code == 0,
@@ -101,6 +190,11 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
         "spec_sha256": evidence.get("spec_sha256"),
         "manifest_sha256": evidence.get("manifest_sha256"),
         "adapter_version": adapter["adapter_version"],
+        "adapter_role": role,
+        "action_class": spec.action,
+        "evaluation_decision": decision,
+        "evaluation_spec_sha256": ev.get("evaluation_spec_sha256"),
+        "evaluation_manifest_sha256": ev.get("evaluation_manifest_sha256"),
     }
 
 def _parse_roles(s: str):
@@ -151,8 +245,8 @@ def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
         }
 
         print(canonical_json(payload))
-        artifact_path = Path('store/weekly_proof/artifacts') / f'{intent}_{run_id}.json'
-        artifact_path.write_text(canonical_json(payload), encoding='utf-8')
+        artifact_path = Path("store/weekly_proof/artifacts") / f"{intent}_{run_id}.json"
+        artifact_path.write_text(canonical_json(payload), encoding="utf-8")
     return exit_code
 
 if __name__ == "__main__":
