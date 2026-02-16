@@ -13,6 +13,8 @@ from agentos.evidence import EvidenceBundle
 from agentos.outcome import ExecutionOutcome
 from agentos.store_fs import FSStore
 from agentos.evaluation import evaluate_task
+from agentos.policy import decide
+from agentos.adapter_role_contract_checker import contract_sha256
 
 SCHEMA_VERSION = "agentos-weekly-proof/v1"
 
@@ -74,14 +76,16 @@ def _emit_minimal_task_events(store: FSStore, spec: ExecutionSpec, ok: bool, exi
             "attempt": 0,
         },
     )
+    d = decide(spec.role, spec.action)
     store.append_event(
         task_id,
         "TASK_VERIFIED",
         {
             "role": spec.role,
             "action": spec.action,
-            "reason": "allow:authorized",
+            "reason": d.reason,
             "inputs_manifest_sha256": spec.inputs_manifest_sha256,
+            "adapter_role_contract_sha256": contract_sha256(),
             "attempt": 0,
         },
     )
