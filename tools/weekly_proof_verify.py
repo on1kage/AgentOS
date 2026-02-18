@@ -102,6 +102,20 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
         if str(body.get("evaluation_manifest_sha256")) != str(r.get("evaluation_manifest_sha256")):
             return False, f"eval_manifest_sha256_mismatch:{role}"
 
+        # 4) Cross-check refinement chain linkage (fail-closed)
+        b_ref = body.get("refinement_task_id")
+        a_ref = r.get("refinement_task_id")
+        if str(body.get("decision")) == "refine":
+            if not isinstance(b_ref, str) or not b_ref:
+                return False, f"missing_refinement_task_id_in_event:{role}"
+            if not isinstance(a_ref, str) or not a_ref:
+                return False, f"missing_refinement_task_id_in_artifact:{role}"
+            if str(b_ref) != str(a_ref):
+                return False, f"refinement_task_id_mismatch:{role}"
+        if str(body.get("decision")) == "accept":
+            if b_ref or a_ref:
+                return False, f"unexpected_refinement_task_id:{role}"
+
     return True, "ok"
 
 
