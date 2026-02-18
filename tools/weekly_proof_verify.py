@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-from agentos.adapter_role_contract_checker import verify_adapter_output
+from agentos.adapter_role_contract_checker import verify_adapter_output, load_contract, verify_registry_versions
+from agentos.adapter_registry import ADAPTERS
 
 
 def _load_json(p: Path) -> Dict[str, Any]:
@@ -44,6 +45,13 @@ def _latest_task_evaluated_body(evdir: Path) -> Dict[str, Any]:
 def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
     d = _load_json(artifact_path)
 
+    contract = load_contract()
+    try:
+        if verify_registry_versions(ADAPTERS, contract) is not True:
+            return False, "registry_contract_version_mismatch"
+    except Exception:
+        return False, "registry_contract_check_exception"
+
     intent = str(d.get("intent") or "")
     if not intent:
         return False, "artifact_missing_intent"
@@ -66,10 +74,18 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
         if ok is not True:
             return False, f"contract_check_failed:{role}"
 
-        # 2) Verify evaluation fields exist in artifact
         for k in ("evaluation_decision", "evaluation_spec_sha256", "evaluation_manifest_sha256"):
             if not isinstance(r.get(k), str) or not r.get(k):
                 return False, f"artifact_missing_eval_field:{role}:{k}"
+
+        decision = r.get("evaluation_decision")
+        refinement_task_id = r.get("refinement_task_id")
+        if decision == "refine":
+            if not isinstance(refinement_task_id, str) or not refinement_task_id:
+                return False, f"missing_refinement_task_id:{role}"
+        if decision == "accept":
+            if refinement_task_id:
+                return False, f"unexpected_refinement_task_id:{role}"
 
         # 3) Cross-check artifact evaluation hashes against authoritative TASK_EVALUATED event
         evdir = _event_dir_for_intent(intent, role)

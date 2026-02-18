@@ -37,7 +37,7 @@ def _make_spec(*, role: str, task_id: str, cmd_argv: list[str], env_allowlist: l
         exec_id="weekly_proof",
         task_id=task_id,
         role=role,
-        action="deterministic_local_execution",
+        action=("external_research" if role == "scout" else "deterministic_local_execution"),
         kind="shell",
         cmd_argv=list(cmd_argv),
         cwd=cwd,
@@ -215,6 +215,7 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
         "evaluation_decision": decision,
         "evaluation_spec_sha256": ev.get("evaluation_spec_sha256"),
         "evaluation_manifest_sha256": ev.get("evaluation_manifest_sha256"),
+        "refinement_task_id": ev.get("refinement_task_id"),
     }
 
 def _parse_roles(s: str):

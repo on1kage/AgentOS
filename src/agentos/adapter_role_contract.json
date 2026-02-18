@@ -7,7 +7,7 @@
       "deterministic_local_execution",
       "evidence_capture"
     ],
-    "output_schema_sha256": "42b46719893e5e072c59b64ecb6746f9a7d8419fb72edccf15761425e550fe49",
+    "output_schema_sha256": "7964b6654938aca485c747ee43bfcaeb3c83b4f93beb1d029bd073b1cc8fcc03",
     "prohibited_actions": [
       "internet_access",
       "unauthorized_actions",
@@ -20,7 +20,7 @@
       "external_research",
       "source_collection"
     ],
-    "output_schema_sha256": "42b46719893e5e072c59b64ecb6746f9a7d8419fb72edccf15761425e550fe49",
+    "output_schema_sha256": "7964b6654938aca485c747ee43bfcaeb3c83b4f93beb1d029bd073b1cc8fcc03",
     "prohibited_actions": [
       "local_execution",
       "state_mutation",

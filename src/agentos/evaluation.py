@@ -46,14 +46,26 @@ def evaluate_task(
     if not run_manifest_sha256:
         raise RuntimeError('run_summary_missing_manifest_sha256')
 
+    refinement_task_id = None
+    if decision == "refine":
+        refinement_task_id = f"refine::{task_id}::{run_spec_sha256}"
+
+    if decision == "refine":
+        if not isinstance(refinement_task_id, str) or not refinement_task_id:
+            raise RuntimeError("missing_refinement_task_id")
+    if decision == "accept":
+        if refinement_task_id is not None:
+            raise RuntimeError("unexpected_refinement_task_id")
+
     eval_spec_obj = {
-        'task_id': task_id,
-        'exec_id': exec_id,
-        'run_spec_sha256': run_spec_sha256,
-        'run_manifest_sha256': run_manifest_sha256,
-        'adapter_role_contract_sha256': contract_sha256(),
-        'decision': decision,
-        'note': note,
+        "task_id": task_id,
+        "exec_id": exec_id,
+        "run_spec_sha256": run_spec_sha256,
+        "run_manifest_sha256": run_manifest_sha256,
+        "adapter_role_contract_sha256": contract_sha256(),
+        "decision": decision,
+        "note": note,
+        "refinement_task_id": refinement_task_id,
     }
     eval_spec_sha256 = sha256_hex(canonical_json(eval_spec_obj).encode('utf-8'))
 
@@ -68,17 +80,19 @@ def evaluate_task(
         task_id,
         'TASK_EVALUATED',
         {
-            'decision': decision,
-            'note': note,
-            'exec_id': exec_id,
-            'run_spec_sha256': run_spec_sha256,
-            'run_manifest_sha256': run_manifest_sha256,
-            'evaluation_spec_sha256': eval_spec_sha256,
-            'evaluation_manifest_sha256': bundle['manifest_sha256'],
+            "decision": decision,
+            "note": note,
+            "exec_id": exec_id,
+            "run_spec_sha256": run_spec_sha256,
+            "run_manifest_sha256": run_manifest_sha256,
+            "evaluation_spec_sha256": eval_spec_sha256,
+            "evaluation_manifest_sha256": bundle["manifest_sha256"],
+            "refinement_task_id": refinement_task_id,
         },
     )
 
     return {
-        'evaluation_spec_sha256': eval_spec_sha256,
-        'evaluation_manifest_sha256': bundle['manifest_sha256'],
+        "evaluation_spec_sha256": eval_spec_sha256,
+        "evaluation_manifest_sha256": bundle["manifest_sha256"],
+        "refinement_task_id": refinement_task_id,
     }

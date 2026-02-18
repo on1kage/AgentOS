@@ -84,8 +84,14 @@ def verify_adapter_output(adapter_name: str, outputs: Dict[str, Any]) -> bool:
     if outputs.get("adapter_role") != adapter_name:
         return False
 
-    expected_action = "deterministic_local_execution"
-    if outputs.get("action_class") != expected_action:
+    action = outputs.get("action_class")
+    if not isinstance(action, str) or not action:
+        return False
+    allowed = contract[adapter_name].get("allowed_actions")
+    prohibited = contract[adapter_name].get("prohibited_actions")
+    if isinstance(prohibited, list) and action in prohibited:
+        return False
+    if isinstance(allowed, list) and allowed and action not in allowed:
         return False
 
     fp = output_schema_fingerprint(outputs)
@@ -99,3 +105,21 @@ if __name__ == "__main__":
     outputs = json.loads(outputs_file.read_text(encoding="utf-8"))
     ok = verify_adapter_output(adapter_name, outputs)
     print(f"{adapter_name} output verification:", ok)
+
+def verify_registry_versions(registry: Dict[str, Any], contract: Dict[str, Any]) -> bool:
+    if not isinstance(registry, dict) or not isinstance(contract, dict):
+        raise TypeError("registry_and_contract_must_be_dicts")
+    if not verify_contract_binding(contract):
+        return False
+    for role, meta in registry.items():
+        if role not in contract or not isinstance(contract.get(role), dict):
+            return False
+        rv = meta.get("adapter_version") if isinstance(meta, dict) else None
+        cv = contract[role].get("adapter_version")
+        if not isinstance(rv, str) or not rv:
+            return False
+        if not isinstance(cv, str) or not cv:
+            return False
+        if rv != cv:
+            return False
+    return True
