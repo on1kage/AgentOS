@@ -46,6 +46,7 @@ def _binding_fingerprint(contract: Dict[str, Any]) -> Dict[str, Any]:
     cv = contract.get("contract_version")
     if not isinstance(cv, str) or not cv:
         raise ValueError("missing_or_invalid_contract_version")
+
     adapters: Dict[str, Any] = {}
     for k in sorted(contract.keys()):
         if k in ("contract_version", "contract_binding_sha256"):
@@ -53,8 +54,12 @@ def _binding_fingerprint(contract: Dict[str, Any]) -> Dict[str, Any]:
         v = contract.get(k)
         if isinstance(v, dict):
             av = v.get("adapter_version")
+            sh = v.get("output_schema_sha256")
             if isinstance(av, str) and av:
-                adapters[k] = av
+                adapters[k] = {
+                    "adapter_version": av,
+                    "output_schema_sha256": sh if isinstance(sh, str) and sh else "",
+                }
     return {"contract_version": cv, "adapters": adapters}
 
 def verify_contract_binding(contract: Dict[str, Any]) -> bool:
