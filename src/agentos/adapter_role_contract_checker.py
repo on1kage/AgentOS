@@ -69,7 +69,7 @@ def verify_contract_binding(contract: Dict[str, Any]) -> bool:
     actual = compute_sha256(_binding_fingerprint(contract))
     return expected == actual
 
-def verify_adapter_output(adapter_name: str, outputs: Dict[str, Any]) -> bool:
+def verify_adapter_output(adapter_name: str, outputs: Dict[str, Any], expected_action: str | None = None) -> bool:
     contract = load_contract()
     if not verify_contract_binding(contract):
         return False
@@ -92,6 +92,11 @@ def verify_adapter_output(adapter_name: str, outputs: Dict[str, Any]) -> bool:
     action = outputs.get("action_class")
     if not isinstance(action, str) or not action:
         return False
+    if expected_action is not None:
+        if not isinstance(expected_action, str) or not expected_action:
+            return False
+        if action != expected_action:
+            return False
     allowed = contract[adapter_name].get("allowed_actions")
     prohibited = contract[adapter_name].get("prohibited_actions")
     if isinstance(prohibited, list) and action in prohibited:

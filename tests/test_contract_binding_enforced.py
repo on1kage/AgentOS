@@ -22,7 +22,7 @@ def test_contract_binding_adapter_version_drift_fails_closed_on_verify_output():
     d = json.loads(FIXTURE_PATH.read_text(encoding='utf-8'))
     scout_out = dict(d["results"]["scout"])
     scout_out["adapter_version"] = "9.9.9"
-    assert verify_adapter_output("scout", scout_out) is False
+    assert verify_adapter_output("scout", scout_out, expected_action="external_research") is False
 
 def test_contract_binding_contract_adapter_version_drift_requires_binding_update():
     c = load_contract()
@@ -45,7 +45,7 @@ def test_contract_action_allowlist_enforced_envoy():
     d = _json.loads(_Path("store/weekly_proof/artifacts/utc_date_weekly_proof.json").read_text(encoding="utf-8"))
     out = dict(d["results"]["envoy"])
     out["action_class"] = "external_research"
-    assert verify_adapter_output("envoy", out) is False
+    assert verify_adapter_output("envoy", out, expected_action="deterministic_local_execution") is False
 
 def test_contract_action_allowlist_enforced_scout():
     import json as _json
@@ -54,4 +54,4 @@ def test_contract_action_allowlist_enforced_scout():
     d = _json.loads(_Path("store/weekly_proof/artifacts/utc_date_weekly_proof.json").read_text(encoding="utf-8"))
     out = dict(d["results"]["scout"])
     out["action_class"] = "deterministic_local_execution"
-    assert verify_adapter_output("scout", out) is False
+    assert verify_adapter_output("scout", out, expected_action="external_research") is False

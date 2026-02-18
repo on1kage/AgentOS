@@ -68,7 +68,8 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
 
         # 1) Verify contract + output schema + adapter_version + adapter_role + action_class invariants
         try:
-            ok = verify_adapter_output(role, r)
+            expected = ("external_research" if role == "scout" else "deterministic_local_execution")
+            ok = verify_adapter_output(role, r, expected_action=expected)
         except Exception as e:
             return False, f"contract_check_exception:{role}:{type(e).__name__}"
         if ok is not True:
