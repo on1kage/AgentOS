@@ -73,6 +73,19 @@ def create_refinement_task_from_parent(
         raise RuntimeError("missing_parent_run_spec_sha256")
 
     expected = f"refine::{parent_task_id}::{run_spec_sha256}"
+
+    # Prevent duplicate refinement with identical note hash
+    note_hash = sha256_hex(note.strip().encode("utf-8"))
+    prefix = f"refine::{parent_task_id}::"
+    for entry in store.root.joinpath("events").glob(f"{prefix}*"):
+        rid = entry.name
+        events = store.list_events(rid)
+        for ev2 in events:
+            if str(ev2.get("type")) == "TASK_CREATED":
+                body2 = dict(ev2.get("body") or {})
+                payload2 = body2.get("payload") or {}
+                if payload2.get("lineage_refinement_note_sha256") == note_hash:
+                    raise RuntimeError("duplicate_refinement_note")
     if refinement_task_id != expected:
         raise RuntimeError("refinement_task_id_mismatch")
 
