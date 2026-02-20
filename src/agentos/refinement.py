@@ -60,6 +60,10 @@ def create_refinement_task_from_parent(
     if decision != "refine":
         raise RuntimeError("parent_not_refine")
 
+    note = body.get("note")
+    if not isinstance(note, str) or not note.strip():
+        raise RuntimeError("refinement_requires_non_empty_note")
+
     refinement_task_id = body.get("refinement_task_id")
     if not isinstance(refinement_task_id, str) or not refinement_task_id:
         raise RuntimeError("missing_refinement_task_id")
@@ -117,6 +121,8 @@ def create_refinement_task_from_parent(
     new_payload["lineage_parent_run_manifest_sha256"] = parent_run_manifest_sha256
     new_payload["lineage_parent_evaluation_spec_sha256"] = eval_spec_sha256
     new_payload["lineage_refinement_task_id"] = refinement_task_id
+    new_payload["lineage_refinement_note"] = note
+    new_payload["lineage_refinement_note_sha256"] = sha256_hex(note.strip().encode("utf-8"))
     new_payload["lineage_adapter_role_contract_sha256"] = contract_sha256()
 
     spec_obj = {
@@ -126,6 +132,7 @@ def create_refinement_task_from_parent(
         "parent_run_spec_sha256": parent_run_spec_sha256,
         "parent_run_manifest_sha256": parent_run_manifest_sha256,
         "parent_evaluation_spec_sha256": eval_spec_sha256,
+        "refinement_note_sha256": sha256_hex(note.strip().encode("utf-8")),
         "adapter_role_contract_sha256": contract_sha256(),
         "role": role,
         "action": action,
