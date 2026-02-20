@@ -1,7 +1,8 @@
-from agentos.agent_pipeline_entry import execute_agent_pipeline
+from agentos.plan_runner_full_pipeline import run_full_pipeline
+
 
 def test_end_to_end_pipeline_acceptance():
-    intent = "search for papers"
-    result = execute_agent_pipeline(intent)
+    payload = {"intent_text": "search for papers"}
+    result = run_full_pipeline(payload)
     assert result is not None
     assert getattr(result, "ok", None) is True
