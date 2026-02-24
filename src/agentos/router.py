@@ -111,6 +111,21 @@ class ExecutionRouter:
         # Authorized: emit dispatch event
         # Load verified inputs manifest for audit continuity
         from agentos.runner import TaskRunner
+
+        # Refinement task checks (lineage enforcement)
+        from agentos.refinement import _refinement_depth
+        # Enforce maximum refinement depth
+        max_depth = 3
+        depth = _refinement_depth(task.task_id)
+        if depth > max_depth:
+            return RouteResult(
+                ok=False,
+                reason='refinement_depth_exceeded',
+                task_id=task.task_id,
+                role=task.role,
+                action=task.action,
+            )
+
         verified_ims = TaskRunner(self.store)._load_verified_inputs_manifest_sha256(task.task_id)
 
         self.store.append_event(

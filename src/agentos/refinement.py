@@ -51,6 +51,13 @@ def _load_run_summary(evidence_root: str, task_id: str, exec_id: str) -> Dict[st
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def _refinement_depth(task_id: str) -> int:
+    d = 0
+    s = str(task_id)
+    while s.startswith("refine::"):
+        d += 1
+        s = s[len("refine::"):]
+    return d
 def create_refinement_task_from_parent(
     *, store: FSStore, evidence_root: str, parent_task_id: str
 ) -> Dict[str, str]:
@@ -88,6 +95,12 @@ def create_refinement_task_from_parent(
                     raise RuntimeError("duplicate_refinement_note")
     if refinement_task_id != expected:
         raise RuntimeError("refinement_task_id_mismatch")
+
+    max_depth = 3
+    parent_depth = _refinement_depth(parent_task_id)
+    new_depth = parent_depth + 1
+    if new_depth > max_depth:
+        raise RuntimeError("refinement_depth_exceeded")
 
     created_ev = _load_created_event(store, parent_task_id)
     created_body = dict(created_ev.get("body") or {})
