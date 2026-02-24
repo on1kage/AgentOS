@@ -23,7 +23,7 @@ def test_full_pipeline_blocks_legacy_intake_when_intent_source_unset():
     assert result is not None
     assert getattr(result, "ok", None) is False
     assert result.decisions[0]["stage"] == "intent_source_gate"
-    assert result.decisions[0]["reason"] == "legacy_path_blocked:intent_source_not_planspec_v1"
+    assert result.decisions[0]["reason"] == "legacy_path_blocked:intent_source_unset"
     assert getattr(result, "verification_manifest_sha256", None)
 
 def test_planspec_success_authorized(monkeypatch):

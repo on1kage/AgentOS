@@ -14,7 +14,7 @@ def test_pipeline_blocks_legacy_intake_when_intent_source_unset():
     assert res is not None
     assert getattr(res, "ok", None) is False
     assert res.decisions[0]["stage"] == "intent_source_gate"
-    assert res.decisions[0]["reason"] == "legacy_path_blocked:intent_source_not_planspec_v1"
+    assert res.decisions[0]["reason"] == "legacy_path_blocked:intent_source_unset"
     assert getattr(res, "verification_manifest_sha256", None)
 
 def test_pipeline_runs_valid_intent_planspec_v1():
