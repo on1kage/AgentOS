@@ -26,3 +26,5 @@ evidence/
 
 # Backups
 backup_*/
+
+*.save*
