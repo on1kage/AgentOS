@@ -8,6 +8,7 @@ from agentos.intent_evidence import IntentEvidence
 from agentos.pipeline import Step, PipelineResult, verify_plan
 from agentos.evidence import EvidenceBundle
 from agentos.store_fs import FSStore
+from agentos.roles import roles as role_registry
 
 
 
@@ -245,6 +246,38 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
         return PipelineResult(
             ok=False,
             decisions=[{"stage": "planspec_refusal", "reason": refusal_reason}],
+            verification_bundle_dir=rb["bundle_dir"],
+            verification_manifest_sha256=rb["manifest_sha256"],
+        )
+    rm = role_registry()
+    if role not in rm:
+        refusal_reason = "planspec_invalid:unknown_role"
+        refusal_spec = sha256_hex(canonical_json({"stage": "planspec_refusal", "intent_sha256": intent_sha256, "reason": refusal_reason, "role": role}).encode("utf-8"))
+        rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+            spec_sha256=refusal_spec,
+            decisions={"stage": "planspec_refusal", "intent_sha256": intent_sha256, "refusal_reason": refusal_reason, "role": role},
+            reason="planspec_refusal",
+            idempotency_key=intent_sha256,
+        )
+        return PipelineResult(
+            ok=False,
+            decisions=[{"stage": "planspec_refusal", "reason": refusal_reason, "role": role}],
+            verification_bundle_dir=rb["bundle_dir"],
+            verification_manifest_sha256=rb["manifest_sha256"],
+        )
+    allowed_actions = list(rm[role].authority)
+    if action not in allowed_actions:
+        refusal_reason = "planspec_invalid:unknown_action_for_role"
+        refusal_spec = sha256_hex(canonical_json({"stage": "planspec_refusal", "intent_sha256": intent_sha256, "reason": refusal_reason, "role": role, "action": action, "allowed_actions": allowed_actions}).encode("utf-8"))
+        rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
+            spec_sha256=refusal_spec,
+            decisions={"stage": "planspec_refusal", "intent_sha256": intent_sha256, "refusal_reason": refusal_reason, "role": role, "action": action, "allowed_actions": allowed_actions},
+            reason="planspec_refusal",
+            idempotency_key=intent_sha256,
+        )
+        return PipelineResult(
+            ok=False,
+            decisions=[{"stage": "planspec_refusal", "reason": refusal_reason, "role": role, "action": action, "allowed_actions": allowed_actions}],
             verification_bundle_dir=rb["bundle_dir"],
             verification_manifest_sha256=rb["manifest_sha256"],
         )
