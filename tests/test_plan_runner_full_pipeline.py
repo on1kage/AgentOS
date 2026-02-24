@@ -1,18 +1,29 @@
+import os
 import pytest
 from agentos.plan_runner_full_pipeline import run_full_pipeline
 
 def test_full_pipeline_success():
-    payload = {"intent_text": "search for papers"}
-    result = run_full_pipeline(payload)
-    assert "compiled_intent" in payload
-    assert "intent_compilation_manifest_sha256" in payload
-    assert result is not None
+    os.environ["AGENTOS_INTENT_SOURCE"] = "planspec_v1"
+    try:
+        payload = {
+            "intent_text": "search for papers",
+            "plan_spec": {"role": "scout", "action": "external_research", "metadata": {"query": "papers", "max_results": 3}},
+        }
+        result = run_full_pipeline(payload)
+        assert "compiled_intent" in payload
+        assert "intent_compilation_manifest_sha256" in payload
+        assert result is not None
+        assert getattr(result, "ok", None) is True
+    finally:
+        os.environ.pop("AGENTOS_INTENT_SOURCE", None)
 
-def test_full_pipeline_refusal():
+def test_full_pipeline_blocks_legacy_intake_when_intent_source_unset():
     payload = {"intent_text": "do something unknown"}
     result = run_full_pipeline(payload)
     assert result is not None
     assert getattr(result, "ok", None) is False
+    assert result.decisions[0]["stage"] == "intent_source_gate"
+    assert result.decisions[0]["reason"] == "legacy_path_blocked:intent_source_not_planspec_v1"
     assert getattr(result, "verification_manifest_sha256", None)
 
 def test_planspec_success_authorized(monkeypatch):
@@ -59,4 +70,3 @@ def test_planspec_refusal_invalid_metadata(monkeypatch):
     assert result is not None
     assert getattr(result, "ok", None) is False
     assert getattr(result, "verification_manifest_sha256", None)
-

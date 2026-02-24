@@ -5,17 +5,11 @@ from typing import Any, Dict, List, Tuple, Set
 
 from agentos.canonical import canonical_json, sha256_hex
 from agentos.intent_evidence import IntentEvidence
-from agentos.intent_normalizer import IntentNormalizer
 from agentos.pipeline import Step, PipelineResult, verify_plan
 from agentos.evidence import EvidenceBundle
 from agentos.store_fs import FSStore
 
-from agentos.intent_compiler_contract import CompilationRefusal
-from agentos.intent_classes import ROLE_FOR_MODE, ACTION_FOR_MODE
-from agentos.research_or_local_intent_compiler import ResearchOrLocalIntentCompiler
-from agentos.intent_compiler_evidence_validator import verify_compiler_evidence
 
-compiler = ResearchOrLocalIntentCompiler()
 
 def _payload_unknown_keys(payload: dict, allowed: Set[str]) -> List[str]:
     if not isinstance(payload, dict):
@@ -157,6 +151,14 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
 
     intent_source = os.environ.get("AGENTOS_INTENT_SOURCE")
     if intent_source != "planspec_v1":
+        return _legacy_path_block(
+            stage="intent_source_gate",
+            evidence_root=evidence_root,
+            intent_sha256=intent_sha256,
+            intent_text=intent_text,
+            legacy_id="intent_source_not_planspec_v1",
+        )
+    if intent_source != "planspec_v1":
         payload.pop("plan_spec", None)
     if intent_source == "planspec_v1":
         ps = payload.get("plan_spec")
@@ -271,112 +273,3 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
             return exit_chk
         return verify_plan(steps, evidence_root=evidence_root)
 
-    use_new_compiler = os.environ.get("AGENTOS_INTENT_COMPILER") == "research_or_local_v1"
-    if use_new_compiler:
-        result = compiler.compile(intent_text, intent_sha256=intent_sha256)
-        if isinstance(result, CompilationRefusal):
-            compiled = {"refusal_reason": result.refusal_reason}
-        else:
-            compiled = result.plan_spec
-        spec_sha = sha256_hex(canonical_json(compiled).encode("utf-8"))
-        rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
-            spec_sha256=spec_sha,
-            decisions={"intent_text": intent_text, "compiled_result": compiled},
-            reason="compiler_evidence",
-            idempotency_key=intent_sha256,
-        )
-        bundle_info = {"bundle_dir": rb["bundle_dir"], "manifest_sha256": rb["manifest_sha256"]}
-        verify_compiler_evidence(bundle_info["bundle_dir"])
-        if isinstance(result, CompilationRefusal):
-            return PipelineResult(
-                ok=False,
-                decisions=[{"stage": "intent_compilation_refusal", "reason": result.refusal_reason}],
-                verification_bundle_dir=bundle_info["bundle_dir"],
-                verification_manifest_sha256=bundle_info["manifest_sha256"],
-            )
-        role = result.plan_spec["delegate"]["role"]
-        action = result.plan_spec["delegate"]["action"]
-        steps: List[Step] = [Step(role=role, action=action)]
-        exit_allowed: Set[str] = {"intent_text", "intent_sha256", "intent_compilation_manifest_sha256", "compiled_intent"}
-        payload["compiled_intent"] = {
-            "intent_sha256": intent_sha256,
-            "selected": {"role": role, "action": action},
-            "intent_compilation_manifest_sha256": bundle_info["manifest_sha256"],
-        }
-        payload["intent_sha256"] = intent_sha256
-        payload["intent_compilation_manifest_sha256"] = bundle_info["manifest_sha256"]
-        exit_chk = _fail_closed_payload_contract(
-            stage="payload_contract_exit",
-            payload=payload,
-            allowed_keys=exit_allowed,
-            evidence_root=evidence_root,
-            intent_sha256=intent_sha256,
-        )
-        if exit_chk.ok is False:
-            return exit_chk
-        return verify_plan(steps, evidence_root=evidence_root)
-
-    normalizer = IntentNormalizer(store, evidence_root=evidence_root)
-    nrec = normalizer.normalize(
-        intent_text,
-        intent_sha256=intent_sha256,
-        normalized_at_utc="deterministic:" + intent_sha256,
-        idempotency_key=intent_sha256,
-    )
-    payload["intent_sha256"] = intent_sha256
-    payload["intent_compilation_manifest_sha256"] = nrec.manifest_sha256
-    payload.pop("plan_spec", None)
-
-    manifest_path = Path(nrec.bundle_dir) / "manifest.sha256.json"
-    if not manifest_path.exists():
-        raise RuntimeError("intent_compilation_evidence_missing")
-
-    import json as _json
-    decisions = _json.loads(manifest_path.read_text(encoding="utf-8")).get("decisions", {})
-    try:
-        role, action = _select_candidate(decisions)
-    except ValueError as e:
-        refusal_reason = str(e)
-        refusal_spec = sha256_hex(canonical_json({"stage": "intent_compilation_refusal", "intent_sha256": intent_sha256, "reason": refusal_reason}).encode("utf-8"))
-        rb = EvidenceBundle(root=evidence_root).write_verification_bundle(
-            spec_sha256=refusal_spec,
-            decisions={
-                "stage": "intent_compilation_refusal",
-                "intent_sha256": intent_sha256,
-                "refusal_reason": refusal_reason,
-                "intent_compilation_manifest_sha256": nrec.manifest_sha256,
-            },
-            reason="intent_compilation_refusal",
-            idempotency_key=intent_sha256,
-        )
-        return PipelineResult(
-            ok=False,
-            decisions=[{"stage": "intent_compilation_refusal", "reason": refusal_reason}],
-            verification_bundle_dir=rb["bundle_dir"],
-            verification_manifest_sha256=rb["manifest_sha256"],
-        )
-
-    payload["compiled_intent"] = {
-        "intent_sha256": intent_sha256,
-        "selected": {"role": role, "action": action},
-        "intent_compilation_manifest_sha256": nrec.manifest_sha256,
-    }
-
-    steps: List[Step] = [Step(role=role, action=action)]
-    exit_allowed: Set[str] = {
-        "intent_text",
-        "intent_sha256",
-        "intent_compilation_manifest_sha256",
-        "compiled_intent",
-    }
-    exit_chk = _fail_closed_payload_contract(
-        stage="payload_contract_exit",
-        payload=payload,
-        allowed_keys=exit_allowed,
-        evidence_root=evidence_root,
-        intent_sha256=intent_sha256,
-    )
-    if exit_chk.ok is False:
-        return exit_chk
-
-    return verify_plan(steps, evidence_root=evidence_root)
