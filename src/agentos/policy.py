@@ -19,23 +19,16 @@ class Decision:
 
 
 # Canonical action labels (stringly typed by design for portability across subsystems)
-KNOWN_ACTIONS = {
-    "architecture",
-    "verification",
-    "protocol_enforcement",
-    "external_research",
-    "source_collection",
-    "deterministic_local_execution",
-    "evidence_capture",
-    # Explicitly disallowed actions
-    "code_execution",
-    "network_calls",
-    "internet_access",
-    "state_mutation",
-    "unauthorized_actions",
-    "capability_claims_without_proof",
-    "local_execution",
-}
+def _known_actions_from_roles() -> set[str]:
+    rmap = roles()
+    out: set[str] = set()
+    for r in rmap.values():
+        out.update(set(r.authority))
+        out.update(set(r.prohibited))
+    return out
+
+
+KNOWN_ACTIONS = _known_actions_from_roles()
 
 
 def decide(role_name: str, action: str) -> Decision:
