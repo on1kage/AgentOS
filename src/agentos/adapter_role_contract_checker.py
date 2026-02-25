@@ -56,9 +56,13 @@ def _binding_fingerprint(contract: Dict[str, Any]) -> Dict[str, Any]:
             av = v.get("adapter_version")
             sh = v.get("output_schema_sha256")
             if isinstance(av, str) and av:
+                al = v.get("allowed_actions")
+                pr = v.get("prohibited_actions")
                 adapters[k] = {
                     "adapter_version": av,
                     "output_schema_sha256": sh if isinstance(sh, str) and sh else "",
+                    "allowed_actions": sorted([str(x) for x in al]) if isinstance(al, list) else [],
+                    "prohibited_actions": sorted([str(x) for x in pr]) if isinstance(pr, list) else [],
                 }
     return {"contract_version": cv, "adapters": adapters}
 
