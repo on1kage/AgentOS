@@ -150,6 +150,34 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
         if require_env:
             raise RuntimeError(f"missing_required_env_for_role:{role}:{','.join(missing)}")
         else:
+            task_id = f"weekly_{role}"
+            store_root = _store_root(intent_name)
+            store_root.mkdir(parents=True, exist_ok=True)
+            ev_store = FSStore(str(store_root / "events"))
+            spec = _make_spec(
+                role=role,
+                task_id=task_id,
+                cmd_argv=cmd,
+                env_allowlist=env_allowlist,
+                cwd=cwd,
+                intent_name=intent_name,
+                intent_spec_obj=intent_spec_obj,
+            )
+            _emit_minimal_task_events(ev_store, spec, True, 0, "0"*64)
+            evidence_root = store_root / "evidence"
+            evidence_root.mkdir(parents=True, exist_ok=True)
+            _write_run_summary(evidence_root, task_id, spec.exec_id, "0"*64)
+            ev = evaluate_task(store=ev_store, evidence_root=str(evidence_root), task_id=task_id, decision="accept", note="weekly_proof_evaluation_skipped_env")
+            snap = rebuild_task_state(ev_store, task_id)
+            if str(snap.get("state")) != "EVALUATED":
+                raise RuntimeError(f"weekly_proof_fsm_not_evaluated:{snap.get('state')}")
+            evs = list(ev_store.list_events(task_id))
+            te = [e for e in evs if str(e.get("type")) == "TASK_EVALUATED"]
+            if not te:
+                raise RuntimeError("weekly_proof_missing_TASK_EVALUATED")
+            body = dict(te[-1].get('body') or {})
+            if str(body.get('evaluation_manifest_sha256')) != str(ev.get('evaluation_manifest_sha256')):
+                raise RuntimeError("weekly_proof_evaluation_manifest_mismatch")
             return {
                 "ok": True,
                 "skipped": True,
@@ -159,10 +187,10 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
                 "manifest_sha256": "0"*64,
                 "adapter_version": adapter["adapter_version"],
                 "adapter_role": role,
-                "action_class": ("external_research" if role == "scout" else "deterministic_local_execution"),
+                "action_class": spec.action,
                 "evaluation_decision": "accept",
-                "evaluation_spec_sha256": "0"*64,
-                "evaluation_manifest_sha256": "0"*64,
+                "evaluation_spec_sha256": ev.get("evaluation_spec_sha256"),
+                "evaluation_manifest_sha256": ev.get("evaluation_manifest_sha256"),
                 "refinement_task_id": None,
             }
 
