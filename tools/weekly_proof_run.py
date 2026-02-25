@@ -14,7 +14,7 @@ from agentos.outcome import ExecutionOutcome
 from agentos.store_fs import FSStore
 from agentos.evaluation import evaluate_task
 from agentos.fsm import rebuild_task_state
-from agentos.policy import decide
+from agentos.policy import decide, KNOWN_ACTIONS
 from agentos.adapter_role_contract_checker import contract_sha256
 
 SCHEMA_VERSION = "agentos-weekly-proof/v1"
@@ -300,8 +300,12 @@ def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
             if role == "scout" and not res.get("ok", False) and not res.get("skipped", False):
                 exit_code = 3
 
+        actions_universe = {"known_actions": sorted(list(KNOWN_ACTIONS))}
+        actions_universe_sha256 = sha256_hex(canonical_json(actions_universe).encode("utf-8"))
+
         payload = {
             "schema_version": SCHEMA_VERSION,
+            "actions_universe_sha256": actions_universe_sha256,
             "intent": intent,
             "roles": roles,
             "results": results,

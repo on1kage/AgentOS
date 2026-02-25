@@ -10,6 +10,8 @@ from typing import Any, Dict, Tuple
 from agentos.adapter_role_contract_checker import verify_adapter_output, load_contract, verify_registry_versions, verify_role_registry_parity
 from agentos.adapter_registry import ADAPTERS
 from agentos.roles import roles
+from agentos.policy import KNOWN_ACTIONS
+from agentos.canonical import canonical_json, sha256_hex
 
 
 def _load_json(p: Path) -> Dict[str, Any]:
@@ -54,6 +56,13 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
             return False, "role_contract_action_parity_mismatch"
     except Exception:
         return False, "registry_contract_check_exception"
+
+    expected_actions_universe_sha256 = sha256_hex(canonical_json({"known_actions": sorted(list(KNOWN_ACTIONS))}).encode("utf-8"))
+    au = d.get("actions_universe_sha256")
+    if not isinstance(au, str) or not au:
+        return False, "artifact_missing_actions_universe_sha256"
+    if au != expected_actions_universe_sha256:
+        return False, "actions_universe_sha256_mismatch"
 
     intent = str(d.get("intent") or "")
     if not intent:

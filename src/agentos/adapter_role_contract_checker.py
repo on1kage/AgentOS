@@ -1,7 +1,10 @@
 import json
 import hashlib
+import re
 from pathlib import Path
 from typing import Any, Dict
+
+MIN_CONTRACT_SEMVER = (1, 0, 0)
 
 CONTRACT_PATH = Path("src/agentos/adapter_role_contract.json")
 
@@ -42,14 +45,39 @@ def output_schema_fingerprint(outputs: Dict[str, Any]) -> Dict[str, Any]:
         "required": sorted(outputs.keys()),
     }
 
+def compute_roles_registry_sha256() -> str:
+    from agentos.roles import roles
+
+    r = roles()
+    canonical = {
+        k: {
+            "authority": sorted(getattr(v, "authority", []) or []),
+            "prohibited": sorted(getattr(v, "prohibited", []) or []),
+        }
+        for k, v in sorted(r.items())
+    }
+    payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
 def _binding_fingerprint(contract: Dict[str, Any]) -> Dict[str, Any]:
     cv = contract.get("contract_version")
     if not isinstance(cv, str) or not cv:
         raise ValueError("missing_or_invalid_contract_version")
 
+    m = re.match(r"^(\d+)\.(\d+)\.(\d+)", cv)
+    if not m:
+        raise ValueError("invalid_contract_version_semver")
+    sem = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    if sem < MIN_CONTRACT_SEMVER:
+        raise ValueError("contract_version_regression")
+
+    rrh = contract.get("roles_registry_sha256")
+    if not isinstance(rrh, str) or not rrh:
+        rrh = ""
+
     adapters: Dict[str, Any] = {}
     for k in sorted(contract.keys()):
-        if k in ("contract_version", "contract_binding_sha256"):
+        if k in ("contract_version", "contract_binding_sha256", "roles_registry_sha256"):
             continue
         v = contract.get(k)
         if isinstance(v, dict):
@@ -64,7 +92,8 @@ def _binding_fingerprint(contract: Dict[str, Any]) -> Dict[str, Any]:
                     "allowed_actions": sorted([str(x) for x in al]) if isinstance(al, list) else [],
                     "prohibited_actions": sorted([str(x) for x in pr]) if isinstance(pr, list) else [],
                 }
-    return {"contract_version": cv, "adapters": adapters}
+
+    return {"contract_version": cv, "roles_registry_sha256": rrh, "adapters": adapters}
 
 def verify_contract_binding(contract: Dict[str, Any]) -> bool:
     expected = contract.get("contract_binding_sha256")
@@ -73,9 +102,17 @@ def verify_contract_binding(contract: Dict[str, Any]) -> bool:
     actual = compute_sha256(_binding_fingerprint(contract))
     return expected == actual
 
+def verify_roles_registry_hash(contract: Dict[str, Any]) -> bool:
+    rrh = contract.get("roles_registry_sha256")
+    if not isinstance(rrh, str) or not rrh:
+        return False
+    return rrh == compute_roles_registry_sha256()
+
 def verify_adapter_output(adapter_name: str, outputs: Dict[str, Any], expected_action: str | None = None) -> bool:
     contract = load_contract()
     if not verify_contract_binding(contract):
+        return False
+    if not verify_roles_registry_hash(contract):
         return False
     if adapter_name not in contract:
         raise ValueError(f"Unknown adapter: {adapter_name}")
@@ -112,20 +149,13 @@ def verify_adapter_output(adapter_name: str, outputs: Dict[str, Any], expected_a
     actual_hash = compute_sha256(fp)
     return expected_hash == actual_hash
 
-
 def verify_role_registry_parity(registry: dict, contract: dict) -> bool:
-    """
-    Ensure runtime role registry authority/prohibited sets exactly match the adapter-role contract,
-    but ONLY for roles that exist in the contract (adapter roles). Non-adapter roles (e.g. morpheus)
-    are out of scope for this contract and must not cause failure.
-    """
     if not isinstance(registry, dict) or not isinstance(contract, dict):
         return False
 
-    # Contract-scoped roles only (ignore metadata keys).
     contract_roles = [
         k for k in contract.keys()
-        if k not in ("contract_version", "contract_binding_sha256")
+        if k not in ("contract_version", "contract_binding_sha256", "roles_registry_sha256")
         and isinstance(contract.get(k), dict)
     ]
 
@@ -142,18 +172,12 @@ def verify_role_registry_parity(registry: dict, contract: dict) -> bool:
             return False
     return True
 
-if __name__ == "__main__":
-    import sys
-    outputs_file = Path(sys.argv[2])
-    adapter_name = sys.argv[1]
-    outputs = json.loads(outputs_file.read_text(encoding="utf-8"))
-    ok = verify_adapter_output(adapter_name, outputs)
-    print(f"{adapter_name} output verification:", ok)
-
 def verify_registry_versions(registry: Dict[str, Any], contract: Dict[str, Any]) -> bool:
     if not isinstance(registry, dict) or not isinstance(contract, dict):
         raise TypeError("registry_and_contract_must_be_dicts")
     if not verify_contract_binding(contract):
+        return False
+    if not verify_roles_registry_hash(contract):
         return False
     for role, meta in registry.items():
         if role not in contract or not isinstance(contract.get(role), dict):
@@ -167,3 +191,11 @@ def verify_registry_versions(registry: Dict[str, Any], contract: Dict[str, Any])
         if rv != cv:
             return False
     return True
+
+if __name__ == "__main__":
+    import sys
+    outputs_file = Path(sys.argv[2])
+    adapter_name = sys.argv[1]
+    outputs = json.loads(outputs_file.read_text(encoding="utf-8"))
+    ok = verify_adapter_output(adapter_name, outputs)
+    print(f"{adapter_name} output verification:", ok)
