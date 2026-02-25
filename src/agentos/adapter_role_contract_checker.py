@@ -112,6 +112,36 @@ def verify_adapter_output(adapter_name: str, outputs: Dict[str, Any], expected_a
     actual_hash = compute_sha256(fp)
     return expected_hash == actual_hash
 
+
+def verify_role_registry_parity(registry: dict, contract: dict) -> bool:
+    """
+    Ensure runtime role registry authority/prohibited sets exactly match the adapter-role contract,
+    but ONLY for roles that exist in the contract (adapter roles). Non-adapter roles (e.g. morpheus)
+    are out of scope for this contract and must not cause failure.
+    """
+    if not isinstance(registry, dict) or not isinstance(contract, dict):
+        return False
+
+    # Contract-scoped roles only (ignore metadata keys).
+    contract_roles = [
+        k for k in contract.keys()
+        if k not in ("contract_version", "contract_binding_sha256")
+        and isinstance(contract.get(k), dict)
+    ]
+
+    for role_name in contract_roles:
+        if role_name not in registry:
+            return False
+        role_obj = registry[role_name]
+        c = contract[role_name]
+        allowed = set(c.get("allowed_actions") or [])
+        prohibited = set(c.get("prohibited_actions") or [])
+        if set(getattr(role_obj, "authority", []) or []) != allowed:
+            return False
+        if set(getattr(role_obj, "prohibited", []) or []) != prohibited:
+            return False
+    return True
+
 if __name__ == "__main__":
     import sys
     outputs_file = Path(sys.argv[2])

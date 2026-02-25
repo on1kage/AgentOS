@@ -7,8 +7,9 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-from agentos.adapter_role_contract_checker import verify_adapter_output, load_contract, verify_registry_versions
+from agentos.adapter_role_contract_checker import verify_adapter_output, load_contract, verify_registry_versions, verify_role_registry_parity
 from agentos.adapter_registry import ADAPTERS
+from agentos.roles import roles
 
 
 def _load_json(p: Path) -> Dict[str, Any]:
@@ -49,6 +50,8 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
     try:
         if verify_registry_versions(ADAPTERS, contract) is not True:
             return False, "registry_contract_version_mismatch"
+        if verify_role_registry_parity(roles(), contract) is not True:
+            return False, "role_contract_action_parity_mismatch"
     except Exception:
         return False, "registry_contract_check_exception"
 
