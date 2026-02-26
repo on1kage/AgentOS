@@ -54,8 +54,8 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
             return False, "registry_contract_version_mismatch"
         if verify_role_registry_parity(roles(), contract) is not True:
             return False, "role_contract_action_parity_mismatch"
-    except Exception:
-        return False, "registry_contract_check_exception"
+    except Exception as e:
+        return False, f"registry_contract_check_exception:{type(e).__name__}:{e}"
 
     expected_actions_universe_sha256 = sha256_hex(canonical_json({"known_actions": sorted(list(KNOWN_ACTIONS))}).encode("utf-8"))
     au = d.get("actions_universe_sha256")
@@ -72,7 +72,11 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
     if not isinstance(results, dict):
         return False, "artifact_missing_results"
 
-    for role in ("envoy", "scout"):
+    artifact_roles = d.get("roles")
+    if not isinstance(artifact_roles, list) or not artifact_roles or any((not isinstance(x, str) or not x) for x in artifact_roles):
+        return False, "artifact_missing_roles"
+
+    for role in artifact_roles:
         if role not in results or not isinstance(results[role], dict):
             return False, f"artifact_missing_role_result:{role}"
 
