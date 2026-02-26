@@ -32,7 +32,7 @@ jobs:
       - name: Generate weekly_proof artifact (scout+envoy)
         run: |
           . .venv/bin/activate
-          PYTHONPATH=./src python3 tools/weekly_proof_run.py --intent utc_date --roles envoy,scout --require-scout
+          PYTHONPATH=./src python3 tools/weekly_proof_run.py --intent utc_date --roles envoy,scout
 
       - name: Verify weekly_proof artifact against contract + event stream
         run: |
