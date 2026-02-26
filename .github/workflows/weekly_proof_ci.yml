@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -23,6 +25,11 @@ jobs:
           . .venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Guardrail: require contract_version bump when contract changes
+        run: |
+          . .venv/bin/activate
+          python3 tools/contract_version_bump_check.py
 
       - name: Run weekly_proof reproducibility tests
         run: |
