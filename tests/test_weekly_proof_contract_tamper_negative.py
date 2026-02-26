@@ -19,9 +19,10 @@ def _load_weekly_proof_verify():
 def _binding_fp(c: dict) -> dict:
     cv = c.get("contract_version")
     rrh = c.get("roles_registry_sha256") if isinstance(c.get("roles_registry_sha256"), str) else ""
+    arh = c.get("adapter_registry_sha256") if isinstance(c.get("adapter_registry_sha256"), str) else ""
     adapters = {}
     for k in sorted(c.keys()):
-        if k in ("contract_version", "contract_binding_sha256", "roles_registry_sha256"):
+        if k in ("contract_version", "contract_binding_sha256", "roles_registry_sha256", "adapter_registry_sha256"):
             continue
         v = c.get(k)
         if isinstance(v, dict):
@@ -36,7 +37,7 @@ def _binding_fp(c: dict) -> dict:
                     "allowed_actions": sorted([str(x) for x in al]) if isinstance(al, list) else [],
                     "prohibited_actions": sorted([str(x) for x in pr]) if isinstance(pr, list) else [],
                 }
-    return {"contract_version": cv, "roles_registry_sha256": rrh, "adapters": adapters}
+    return {"contract_version": cv, "roles_registry_sha256": rrh, "adapter_registry_sha256": arh, "adapters": adapters}
 
 def test_weekly_proof_fails_closed_on_contract_allowed_actions_tamper(tmp_path: Path):
     m = _load_weekly_proof_verify()

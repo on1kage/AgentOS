@@ -59,6 +59,26 @@ def compute_roles_registry_sha256() -> str:
     payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
+def compute_adapter_registry_sha256() -> str:
+    from agentos.adapter_registry import ADAPTERS
+
+    canonical = {}
+    for k, v in sorted(ADAPTERS.items()):
+        if not isinstance(v, dict):
+            continue
+        cmd = v.get("cmd")
+        env = v.get("env_allowlist")
+        av = v.get("adapter_version")
+        desc = v.get("description")
+        canonical[k] = {
+            "cmd": list(cmd) if isinstance(cmd, list) else [],
+            "env_allowlist": sorted([str(x) for x in env]) if isinstance(env, list) else [],
+            "adapter_version": str(av) if isinstance(av, str) and av else "",
+            "description": str(desc) if isinstance(desc, str) else "",
+        }
+    payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
 def _binding_fingerprint(contract: Dict[str, Any]) -> Dict[str, Any]:
     cv = contract.get("contract_version")
     if not isinstance(cv, str) or not cv:
@@ -75,9 +95,13 @@ def _binding_fingerprint(contract: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(rrh, str) or not rrh:
         rrh = ""
 
+    arh = contract.get("adapter_registry_sha256")
+    if not isinstance(arh, str) or not arh:
+        arh = ""
+
     adapters: Dict[str, Any] = {}
     for k in sorted(contract.keys()):
-        if k in ("contract_version", "contract_binding_sha256", "roles_registry_sha256"):
+        if k in ("contract_version", "contract_binding_sha256", "roles_registry_sha256", "adapter_registry_sha256"):
             continue
         v = contract.get(k)
         if isinstance(v, dict):
@@ -93,7 +117,7 @@ def _binding_fingerprint(contract: Dict[str, Any]) -> Dict[str, Any]:
                     "prohibited_actions": sorted([str(x) for x in pr]) if isinstance(pr, list) else [],
                 }
 
-    return {"contract_version": cv, "roles_registry_sha256": rrh, "adapters": adapters}
+    return {"contract_version": cv, "roles_registry_sha256": rrh, "adapter_registry_sha256": arh, "adapters": adapters}
 
 def verify_contract_binding(contract: Dict[str, Any]) -> bool:
     expected = contract.get("contract_binding_sha256")
@@ -108,11 +132,19 @@ def verify_roles_registry_hash(contract: Dict[str, Any]) -> bool:
         return False
     return rrh == compute_roles_registry_sha256()
 
+def verify_adapter_registry_hash(contract: Dict[str, Any]) -> bool:
+    arh = contract.get("adapter_registry_sha256")
+    if not isinstance(arh, str) or not arh:
+        return False
+    return arh == compute_adapter_registry_sha256()
+
 def verify_adapter_output(adapter_name: str, outputs: Dict[str, Any], expected_action: str | None = None) -> bool:
     contract = load_contract()
     if not verify_contract_binding(contract):
         return False
     if not verify_roles_registry_hash(contract):
+        return False
+    if not verify_adapter_registry_hash(contract):
         return False
     if adapter_name not in contract:
         raise ValueError(f"Unknown adapter: {adapter_name}")
@@ -155,7 +187,7 @@ def verify_role_registry_parity(registry: dict, contract: dict) -> bool:
 
     contract_roles = [
         k for k in contract.keys()
-        if k not in ("contract_version", "contract_binding_sha256", "roles_registry_sha256")
+        if k not in ("contract_version", "contract_binding_sha256", "roles_registry_sha256", "adapter_registry_sha256")
         and isinstance(contract.get(k), dict)
     ]
 
