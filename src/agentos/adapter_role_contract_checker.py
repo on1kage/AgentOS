@@ -75,6 +75,30 @@ def _role_assignments_fingerprint() -> Dict[str, Any]:
         return {"invalid_role_assignments": True}
     if not isinstance(ra, dict):
         return {"invalid_role_assignments": True}
+    out = {}
+    for role_name in ra:
+        role_cfg = ra.get(role_name) if isinstance(ra.get(role_name), dict) else {}
+        out[role_name] = {
+            "provider": str(role_cfg.get("provider") or ""),
+            "model": str(role_cfg.get("model") or ""),
+            "api_env": str(role_cfg.get("api_env") or ""),
+        }
+    return out
+
+    """
+    Fail-closed binding surface:
+    include role_assignments.json (provider/model/api_env names) in adapter registry hash.
+    This enforces: swap role assignment => contract bump required.
+    """
+    ra_path = Path("src/agentos/role_assignments.json")
+    if not ra_path.exists():
+        return {}
+    try:
+        ra = json.loads(ra_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"invalid_role_assignments": True}
+    if not isinstance(ra, dict):
+        return {"invalid_role_assignments": True}
     scout = ra.get("scout") if isinstance(ra.get("scout"), dict) else {}
     return {
         "scout": {
