@@ -64,6 +64,14 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
     if au != expected_actions_universe_sha256:
         return False, "actions_universe_sha256_mismatch"
 
+    role_assignments_obj = json.loads((Path("src/agentos/role_assignments.json")).read_text(encoding="utf-8"))
+    expected_role_assignments_sha256 = sha256_hex(canonical_json(role_assignments_obj).encode("utf-8"))
+    ra = d.get("role_assignments_sha256")
+    if not isinstance(ra, str) or not ra:
+        return False, "artifact_missing_role_assignments_sha256"
+    if ra != expected_role_assignments_sha256:
+        return False, "role_assignments_sha256_mismatch"
+
     intent = str(d.get("intent") or "")
     if not intent:
         return False, "artifact_missing_intent"

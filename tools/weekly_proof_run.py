@@ -303,9 +303,13 @@ def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
         actions_universe = {"known_actions": sorted(list(KNOWN_ACTIONS))}
         actions_universe_sha256 = sha256_hex(canonical_json(actions_universe).encode("utf-8"))
 
+        role_assignments_obj = json.loads((Path("src/agentos/role_assignments.json")).read_text(encoding="utf-8"))
+        role_assignments_sha256 = sha256_hex(canonical_json(role_assignments_obj).encode("utf-8"))
+
         payload = {
             "schema_version": SCHEMA_VERSION,
             "actions_universe_sha256": actions_universe_sha256,
+            "role_assignments_sha256": role_assignments_sha256,
             "intent": intent,
             "roles": roles,
             "results": results,
