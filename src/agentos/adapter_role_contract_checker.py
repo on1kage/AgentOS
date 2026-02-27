@@ -59,10 +59,37 @@ def compute_roles_registry_sha256() -> str:
     payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
+
+def _role_assignments_fingerprint() -> Dict[str, Any]:
+    """
+    Fail-closed binding surface:
+    include role_assignments.json (provider/model/api_env names) in adapter registry hash.
+    This enforces: swap role assignment => contract bump required.
+    """
+    ra_path = Path("src/agentos/role_assignments.json")
+    if not ra_path.exists():
+        return {}
+    try:
+        ra = json.loads(ra_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"invalid_role_assignments": True}
+    if not isinstance(ra, dict):
+        return {"invalid_role_assignments": True}
+    scout = ra.get("scout") if isinstance(ra.get("scout"), dict) else {}
+    return {
+        "scout": {
+            "provider": str(scout.get("provider") or ""),
+            "model": str(scout.get("model") or ""),
+            "api_env": str(scout.get("api_env") or ""),
+        }
+    }
+
+
 def compute_adapter_registry_sha256() -> str:
     from agentos.adapter_registry import ADAPTERS
 
     canonical = {}
+    canonical["role_assignments"] = _role_assignments_fingerprint()
     for k, v in sorted(ADAPTERS.items()):
         if not isinstance(v, dict):
             continue
