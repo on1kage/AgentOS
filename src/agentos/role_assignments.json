@@ -1,0 +1,17 @@
+{
+  "morpheus": {
+    "provider": "openai",
+    "model": "chatgpt",
+    "api_env": "OPENAI_API_KEY"
+  },
+  "scout": {
+    "provider": "perplexity",
+    "model": "sonar-pro",
+    "api_env": "PPLX_API_KEY"
+  },
+  "envoy": {
+    "provider": "ollama",
+    "model": "qwen2.5:14b",
+    "api_env": null
+  }
+}

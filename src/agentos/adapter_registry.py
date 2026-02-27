@@ -1,7 +1,7 @@
 ADAPTERS = {
     "scout": {
-        "cmd": ["python3", "/home/storm/AgentOS/tools/scout_debug.py"],
-        "env_allowlist": ["PPLX_API_KEY","PPLX_BASE_URL"],
+        "cmd": ["python3", "tools/scout_live_probe.py"],
+        "env_allowlist": ["PPLX_API_KEY"],
         "description": "External read-only intelligence via Perplexity",
         "adapter_version": "1.0.0"
     },
