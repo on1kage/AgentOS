@@ -267,6 +267,9 @@ def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
     run_id = "weekly_proof"
     intents = [i.strip() for i in intent_name.split(",") if i.strip()]
     roles = _parse_roles(roles_csv)
+    from agentos.role_assignments_loader import load_role_assignments
+    require_env_roles = [r for r in roles if not (r == "scout" and not require_scout)]
+    load_role_assignments(require_env_for_roles=require_env_roles)
     exit_code = 0
 
     for intent in intents:
