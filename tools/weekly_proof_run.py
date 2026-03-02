@@ -10,6 +10,7 @@ from agentos.intents import intent_spec
 from agentos.execution import ExecutionSpec, canonical_inputs_manifest
 from agentos.executor import LocalExecutor
 from agentos.evidence import EvidenceBundle
+from agentos.evidence_schema import bundle_schema_sha256
 from agentos.outcome import ExecutionOutcome
 from agentos.store_fs import FSStore
 from agentos.evaluation import evaluate_task
@@ -185,6 +186,7 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
                 "bundle_dir": "",
                 "spec_sha256": "0"*64,
                 "manifest_sha256": "0"*64,
+                "bundle_schema_sha256": "0"*64,
                 "adapter_version": adapter["adapter_version"],
                 "adapter_role": role,
                 "action_class": spec.action,
@@ -221,7 +223,6 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
         outcome=outcome,
         reason="weekly_proof",
     )
-
     _write_run_summary(evidence_root, task_id, spec.exec_id, str(evidence.get("manifest_sha256")))
     ev_store = FSStore(str(store_root / "events"))
     _emit_minimal_task_events(ev_store, spec, bool(r.exit_code == 0), int(r.exit_code), str(evidence.get("manifest_sha256")))
@@ -261,6 +262,7 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
         "bundle_dir": evidence.get("bundle_dir"),
         "spec_sha256": evidence.get("spec_sha256"),
         "manifest_sha256": evidence.get("manifest_sha256"),
+        "bundle_schema_sha256": bundle_schema_sha256(str(evidence.get("bundle_dir") or "")) if str(evidence.get("bundle_dir") or "") else ("0"*64),
         "adapter_version": adapter["adapter_version"],
         "adapter_role": role,
         "action_class": spec.action,

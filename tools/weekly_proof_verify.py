@@ -12,6 +12,7 @@ from agentos.adapter_registry import ADAPTERS
 from agentos.roles import roles
 from agentos.policy import KNOWN_ACTIONS
 from agentos.canonical import canonical_json, sha256_hex
+from agentos.evidence_schema import bundle_schema_sha256
 
 
 def _load_json(p: Path) -> Dict[str, Any]:
@@ -49,6 +50,10 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
     d = _load_json(artifact_path)
 
     contract = load_contract()
+    pinned_schema = contract.get('evidence_bundle_schema_sha256')
+    if not isinstance(pinned_schema, str) or not pinned_schema:
+        return False, 'contract_missing_evidence_bundle_schema_sha256'
+
     try:
         if verify_registry_versions(ADAPTERS, contract) is not True:
             return False, "registry_contract_version_mismatch"
@@ -89,6 +94,20 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
             return False, f"artifact_missing_role_result:{role}"
 
         r = dict(results[role])
+
+        bsh = r.get('bundle_schema_sha256')
+        if not isinstance(bsh, str) or not bsh:
+            return False, f"artifact_missing_bundle_schema_sha256:{role}"
+        if bsh != pinned_schema and bsh != ('0'*64):
+            return False, f"bundle_schema_sha256_not_pinned:{role}"
+        bd = str(r.get('bundle_dir') or '')
+        if bd:
+            computed = bundle_schema_sha256(bd)
+            if computed != pinned_schema:
+                return False, f"bundle_schema_computed_mismatch_contract:{role}"
+            if bsh != computed:
+                return False, f"bundle_schema_sha256_mismatch_computed:{role}"
+
 
         # 1) Verify contract + output schema + adapter_version + adapter_role + action_class invariants
         try:
