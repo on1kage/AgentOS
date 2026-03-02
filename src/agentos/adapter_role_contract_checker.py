@@ -49,13 +49,13 @@ def compute_roles_registry_sha256() -> str:
     from agentos.roles import roles
 
     r = roles()
-    canonical = {
-        k: {
+    canonical = {}
+    for k, v in sorted(r.items()):
+        canonical[str(k)] = {
+            "name": str(getattr(v, "name", "") or ""),
             "authority": sorted(getattr(v, "authority", []) or []),
             "prohibited": sorted(getattr(v, "prohibited", []) or []),
         }
-        for k, v in sorted(r.items())
-    }
     payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 

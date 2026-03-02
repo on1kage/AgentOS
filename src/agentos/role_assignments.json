@@ -1,17 +1,17 @@
 {
+  "envoy": {
+    "api_env": null,
+    "model": "qwen2.5:14b",
+    "provider": "ollama"
+  },
   "morpheus": {
-    "provider": "openai",
+    "api_env": "OPENAI_API_KEY",
     "model": "chatgpt",
-    "api_env": "OPENAI_API_KEY"
+    "provider": "openai"
   },
   "scout": {
-    "provider": "perplexity",
+    "api_env": "OPENAI_API_KEY",
     "model": "sonar-pro",
-    "api_env": "PPLX_API_KEY"
-  },
-  "envoy": {
-    "provider": "ollama",
-    "model": "qwen2.5:14b",
-    "api_env": null
+    "provider": "local"
   }
 }

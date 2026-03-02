@@ -226,22 +226,32 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
     ev_store = FSStore(str(store_root / "events"))
     _emit_minimal_task_events(ev_store, spec, bool(r.exit_code == 0), int(r.exit_code), str(evidence.get("manifest_sha256")))
 
-    decision = "accept" if r.exit_code == 0 else "refine"
-    ev = evaluate_task(store=ev_store, evidence_root=str(evidence_root), task_id=task_id, decision=decision, note="weekly_proof_evaluation")
+    if r.exit_code == 0:
+        decision = "accept"
+        ev = evaluate_task(store=ev_store, evidence_root=str(evidence_root), task_id=task_id, decision=decision, note="weekly_proof_evaluation")
 
-    # Fail-closed: weekly_proof must prove deterministic FSM replay reaches EVALUATED.
-    snap = rebuild_task_state(ev_store, task_id)
-    if str(snap.get("state")) != "EVALUATED":
-        raise RuntimeError(f"weekly_proof_fsm_not_evaluated:{snap.get('state')}")
+        snap = rebuild_task_state(ev_store, task_id)
+        if str(snap.get("state")) != "EVALUATED":
+            raise RuntimeError(f"weekly_proof_fsm_not_evaluated:{snap.get('state')}")
 
-    # Fail-closed: evaluation manifest must match what was recorded in TASK_EVALUATED.
-    evs = list(ev_store.list_events(task_id))
-    te = [e for e in evs if str(e.get("type")) == "TASK_EVALUATED"]
-    if not te:
-        raise RuntimeError("weekly_proof_missing_TASK_EVALUATED")
-    body = dict(te[-1].get('body') or {})
-    if str(body.get('evaluation_manifest_sha256')) != str(ev.get('evaluation_manifest_sha256')):
-        raise RuntimeError("weekly_proof_evaluation_manifest_mismatch")
+        evs = list(ev_store.list_events(task_id))
+        te = [e for e in evs if str(e.get("type")) == "TASK_EVALUATED"]
+        if not te:
+            raise RuntimeError("weekly_proof_missing_TASK_EVALUATED")
+        body = dict(te[-1].get("body") or {})
+        if str(body.get("evaluation_manifest_sha256")) != str(ev.get("evaluation_manifest_sha256")):
+            raise RuntimeError("weekly_proof_evaluation_manifest_mismatch")
+
+    else:
+        decision = "refine"
+        ev = None
+        snap = rebuild_task_state(ev_store, task_id)
+        if str(snap.get("state")) != "FAILED":
+            raise RuntimeError(f"weekly_proof_fsm_not_failed:{snap.get('state')}")
+        evs = list(ev_store.list_events(task_id))
+        rf = [e for e in evs if str(e.get("type")) == "RUN_FAILED"]
+        if not rf:
+            raise RuntimeError("weekly_proof_missing_RUN_FAILED")
 
 
     return {
@@ -255,9 +265,9 @@ def _run_role(*, intent_name: str, intent_spec_obj: dict, role: str, store_root:
         "adapter_role": role,
         "action_class": spec.action,
         "evaluation_decision": decision,
-        "evaluation_spec_sha256": ev.get("evaluation_spec_sha256"),
-        "evaluation_manifest_sha256": ev.get("evaluation_manifest_sha256"),
-        "refinement_task_id": ev.get("refinement_task_id"),
+        "evaluation_spec_sha256": (ev.get("evaluation_spec_sha256") if ev else ""),
+        "evaluation_manifest_sha256": (ev.get("evaluation_manifest_sha256") if ev else ""),
+        "refinement_task_id": (ev.get("refinement_task_id") if ev else None),
     }
 
 def _parse_roles(s: str):
@@ -320,6 +330,7 @@ def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
 
         print(canonical_json(payload))
         artifact_path = Path("store/weekly_proof/artifacts") / f"{intent}_{run_id}.json"
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
         artifact_path.write_text(canonical_json(payload), encoding="utf-8")
     return exit_code
 
