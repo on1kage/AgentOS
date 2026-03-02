@@ -5,6 +5,10 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   reproducibility:
     runs-on: ubuntu-22.04
@@ -31,7 +35,7 @@ jobs:
           . .venv/bin/activate
           python3 tools/import_surface_audit.py
 
-      - name: Guardrail: require contract_version bump when contract changes
+      - name: "Guardrail: require contract_version bump when contract changes"
         run: |
           . .venv/bin/activate
           python3 tools/contract_version_bump_check.py
@@ -45,7 +49,6 @@ jobs:
         run: |
           . .venv/bin/activate
           PYTHONPATH=./src python3 tools/weekly_proof_run.py --intent utc_date --roles envoy,scout
-
 
       - name: Seal artifact hash (run 1)
         run: |
@@ -63,9 +66,31 @@ jobs:
           . .venv/bin/activate
           sha256sum store/weekly_proof/artifacts/utc_date_weekly_proof.json | awk '{print $1}' > artifact_hash_run2.txt
 
-      - name: Enforce deterministic artifact hash
+      - name: Enforce deterministic artifact hash (intra-run)
         run: |
           diff artifact_hash_run1.txt artifact_hash_run2.txt
+
+      - name: Fetch previous successful weekly_proof hash (inter-run)
+        env:
+          WEEKLY_PROOF_WORKFLOW_FILE: weekly_proof_ci.yml
+          WEEKLY_PROOF_BRANCH: main
+        run: |
+          . .venv/bin/activate
+          prev="$(python3 tools/ci_fetch_prev_weekly_proof_hash.py || true)"
+          printf "%s\n" "$prev" > prev_hash.txt
+          if printf "%s" "$prev" | grep -Eq '^[0-9a-f]{64}$'; then
+            diff prev_hash.txt artifact_hash_run1.txt
+          fi
+
+      - name: Upload weekly_proof hash artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly_proof_hash
+          if-no-files-found: error
+          path: |
+            artifact_hash_run1.txt
+            artifact_hash_run2.txt
+            prev_hash.txt
 
       - name: Verify weekly_proof artifact against contract + event stream
         run: |
