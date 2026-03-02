@@ -8,6 +8,26 @@ from pathlib import Path
 
 CONTRACT_PATH = Path("src/agentos/adapter_role_contract.json")
 
+ADAPTER_REGISTRY_PATH = Path("src/agentos/adapter_registry.py")
+
+def adapter_versions(doc_text: str) -> dict:
+    try:
+        import ast
+        tree = ast.parse(doc_text)
+        versions = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                keys = [k.s if hasattr(k, "s") else None for k in node.keys]
+                if "adapter_version" in keys:
+                    for k, v in zip(node.keys, node.values):
+                        if hasattr(k, "s") and k.s == "adapter_version" and hasattr(v, "s"):
+                            versions[id(node)] = v.s
+        return versions
+    except Exception:
+        return {}
+
+
+
 
 def run(cmd: list[str]) -> str:
     return subprocess.check_output(cmd, text=True).strip()
@@ -56,6 +76,24 @@ def main() -> int:
         return 2
 
     contract_changed = any(p.strip() == CONTRACT_PATH.as_posix() for p in changed if p.strip())
+    
+    # --- Enforce adapter_version monotonic policy ---
+    adapter_changed = any(p.strip() == ADAPTER_REGISTRY_PATH.as_posix() for p in changed if p.strip())
+    if adapter_changed:
+        try:
+            new_adapter_text = ADAPTER_REGISTRY_PATH.read_text(encoding="utf-8")
+            old_adapter_text = git_show(base_ref, ADAPTER_REGISTRY_PATH)
+            new_versions = adapter_versions(new_adapter_text)
+            old_versions = adapter_versions(old_adapter_text)
+        except Exception:
+            print("FAIL: adapter_registry changed but could not diff adapter_version", file=sys.stderr)
+            return 1
+
+        if new_versions != old_versions:
+            if not contract_changed:
+                print("FAIL: adapter_version changed but contract file not updated", file=sys.stderr)
+                return 1
+
     if not contract_changed:
         print("OK: contract file unchanged")
         return 0
