@@ -41,6 +41,27 @@ jobs:
           . .venv/bin/activate
           PYTHONPATH=./src python3 tools/weekly_proof_run.py --intent utc_date --roles envoy,scout
 
+
+      - name: Seal artifact hash (run 1)
+        run: |
+          . .venv/bin/activate
+          sha256sum store/weekly_proof/artifacts/utc_date_weekly_proof.json | awk '{print $1}' > artifact_hash_run1.txt
+
+      - name: Regenerate weekly_proof artifact (run 2)
+        run: |
+          . .venv/bin/activate
+          rm -rf store/weekly_proof
+          PYTHONPATH=./src python3 tools/weekly_proof_run.py --intent utc_date --roles envoy,scout
+
+      - name: Seal artifact hash (run 2)
+        run: |
+          . .venv/bin/activate
+          sha256sum store/weekly_proof/artifacts/utc_date_weekly_proof.json | awk '{print $1}' > artifact_hash_run2.txt
+
+      - name: Enforce deterministic artifact hash
+        run: |
+          diff artifact_hash_run1.txt artifact_hash_run2.txt
+
       - name: Verify weekly_proof artifact against contract + event stream
         run: |
           . .venv/bin/activate
