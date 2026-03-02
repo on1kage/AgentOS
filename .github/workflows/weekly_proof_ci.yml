@@ -26,6 +26,11 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Audit adapter import surface (stdlib + agentos + onemind only)
+        run: |
+          . .venv/bin/activate
+          python3 tools/import_surface_audit.py
+
       - name: Guardrail: require contract_version bump when contract changes
         run: |
           . .venv/bin/activate
