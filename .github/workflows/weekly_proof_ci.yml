@@ -43,7 +43,7 @@ jobs:
       - name: Run weekly_proof reproducibility tests
         run: |
           . .venv/bin/activate
-          PYTHONPATH=./src pytest -q tests/test_weekly_proof_reproducibility.py
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=./src pytest -q tests/test_weekly_proof_reproducibility.py
 
       - name: Generate weekly_proof artifact (scout+envoy)
         run: |

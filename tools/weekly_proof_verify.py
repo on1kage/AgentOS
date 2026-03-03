@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-from agentos.adapter_role_contract_checker import verify_adapter_output, load_contract, verify_registry_versions, verify_role_registry_parity
+from agentos.adapter_role_contract_checker import verify_adapter_output, load_contract, verify_registry_versions, verify_role_registry_parity, verify_contract_binding, verify_roles_registry_hash, verify_adapter_registry_hash
 from agentos.adapter_registry import ADAPTERS
 from agentos.roles import roles
 from agentos.policy import KNOWN_ACTIONS
@@ -59,6 +59,12 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
             return False, "registry_contract_version_mismatch"
         if verify_role_registry_parity(roles(), contract) is not True:
             return False, "role_contract_action_parity_mismatch"
+        if verify_contract_binding(contract) is not True:
+            return False, "contract_binding_sha256_mismatch"
+        if verify_roles_registry_hash(contract) is not True:
+            return False, "roles_registry_sha256_mismatch"
+        if verify_adapter_registry_hash(contract) is not True:
+            return False, "adapter_registry_sha256_mismatch"
     except Exception as e:
         return False, f"registry_contract_check_exception:{type(e).__name__}:{e}"
 

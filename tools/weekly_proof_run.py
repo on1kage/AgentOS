@@ -38,7 +38,11 @@ def _make_spec(*, role: str, task_id: str, cmd_argv: list[str], env_allowlist: l
         exec_id="weekly_proof",
         task_id=task_id,
         role=role,
-        action=("external_research" if role == "scout" else "deterministic_local_execution"),
+        action=(
+            "external_research" if role == "scout"
+            else "architecture" if role == "morpheus"
+            else "deterministic_local_execution"
+        ),
         kind="shell",
         cmd_argv=list(cmd_argv),
         cwd=cwd,
