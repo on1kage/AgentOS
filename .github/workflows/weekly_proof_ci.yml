@@ -76,10 +76,15 @@ jobs:
           WEEKLY_PROOF_BRANCH: main
         run: |
           . .venv/bin/activate
-          prev="$(python3 tools/ci_fetch_prev_weekly_proof_hash.py || true)"
-          printf "%s\n" "$prev" > prev_hash.txt
-          if printf "%s" "$prev" | grep -Eq '^[0-9a-f]{64}$'; then
+          python3 tools/ci_fetch_prev_weekly_proof_hash.py > prev_hash.txt
+          if grep -Eq '^[0-9a-f]{64}$' prev_hash.txt; then
             diff prev_hash.txt artifact_hash_run1.txt
+          else
+            if grep -Eq '^(NO_PREVIOUS_SUCCESS|NO_PREVIOUS_ARTIFACT)$' prev_hash.txt; then
+              exit 0
+            fi
+            cat prev_hash.txt
+            exit 2
           fi
 
       - name: Upload weekly_proof hash artifacts
