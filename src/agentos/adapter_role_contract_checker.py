@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict
 
+from agentos.kernel_fingerprint import compute_kernel_tree_sha256
+
 MIN_CONTRACT_SEMVER = (1, 0, 0)
 
 CONTRACT_PATH = Path("src/agentos/adapter_role_contract.json")
@@ -85,28 +87,6 @@ def _role_assignments_fingerprint() -> Dict[str, Any]:
         }
     return out
 
-    """
-    Fail-closed binding surface:
-    include role_assignments.json (provider/model/api_env names) in adapter registry hash.
-    This enforces: swap role assignment => contract bump required.
-    """
-    ra_path = Path("src/agentos/role_assignments.json")
-    if not ra_path.exists():
-        return {}
-    try:
-        ra = json.loads(ra_path.read_text(encoding="utf-8"))
-    except Exception:
-        return {"invalid_role_assignments": True}
-    if not isinstance(ra, dict):
-        return {"invalid_role_assignments": True}
-    scout = ra.get("scout") if isinstance(ra.get("scout"), dict) else {}
-    return {
-        "scout": {
-            "provider": str(scout.get("provider") or ""),
-            "model": str(scout.get("model") or ""),
-            "api_env": str(scout.get("api_env") or ""),
-        }
-    }
 
 
 def compute_adapter_registry_sha256() -> str:
@@ -147,12 +127,17 @@ def _binding_fingerprint(contract: Dict[str, Any]) -> Dict[str, Any]:
         rrh = ""
 
     arh = contract.get("adapter_registry_sha256")
+
+    kth = contract.get("kernel_tree_sha256")
+    if not isinstance(kth, str) or not kth:
+        kth = ""
+
     if not isinstance(arh, str) or not arh:
         arh = ""
 
     adapters: Dict[str, Any] = {}
     for k in sorted(contract.keys()):
-        if k in ("contract_version", "contract_binding_sha256", "roles_registry_sha256", "adapter_registry_sha256"):
+        if k in ("contract_version", "contract_binding_sha256", "roles_registry_sha256", "adapter_registry_sha256", "kernel_tree_sha256"):
             continue
         v = contract.get(k)
         if isinstance(v, dict):
@@ -168,7 +153,7 @@ def _binding_fingerprint(contract: Dict[str, Any]) -> Dict[str, Any]:
                     "prohibited_actions": sorted([str(x) for x in pr]) if isinstance(pr, list) else [],
                 }
 
-    return {"contract_version": cv, "roles_registry_sha256": rrh, "adapter_registry_sha256": arh, "adapters": adapters}
+    return {"contract_version": cv, "roles_registry_sha256": rrh, "adapter_registry_sha256": arh, "kernel_tree_sha256": kth, "adapters": adapters}
 
 def verify_contract_binding(contract: Dict[str, Any]) -> bool:
     expected = contract.get("contract_binding_sha256")
@@ -183,8 +168,15 @@ def verify_roles_registry_hash(contract: Dict[str, Any]) -> bool:
         return False
     return rrh == compute_roles_registry_sha256()
 
+def verify_kernel_tree_hash(contract: Dict[str, Any]) -> bool:
+    kth = contract.get("kernel_tree_sha256")
+    if not isinstance(kth, str) or not kth:
+        return False
+    return kth == compute_kernel_tree_sha256()
+
 def verify_adapter_registry_hash(contract: Dict[str, Any]) -> bool:
     arh = contract.get("adapter_registry_sha256")
+
     if not isinstance(arh, str) or not arh:
         return False
     return arh == compute_adapter_registry_sha256()
@@ -196,6 +188,8 @@ def verify_adapter_output(adapter_name: str, outputs: Dict[str, Any], expected_a
     if not verify_roles_registry_hash(contract):
         return False
     if not verify_adapter_registry_hash(contract):
+        return False
+    if not verify_kernel_tree_hash(contract):
         return False
     if adapter_name not in contract:
         raise ValueError(f"Unknown adapter: {adapter_name}")
@@ -238,7 +232,7 @@ def verify_role_registry_parity(registry: dict, contract: dict) -> bool:
 
     contract_roles = [
         k for k in contract.keys()
-        if k not in ("contract_version", "contract_binding_sha256", "roles_registry_sha256", "adapter_registry_sha256")
+        if k not in ("contract_version", "contract_binding_sha256", "roles_registry_sha256", "adapter_registry_sha256", "kernel_tree_sha256")
         and isinstance(contract.get(k), dict)
     ]
 
@@ -261,6 +255,8 @@ def verify_registry_versions(registry: Dict[str, Any], contract: Dict[str, Any])
     if not verify_contract_binding(contract):
         return False
     if not verify_roles_registry_hash(contract):
+        return False
+    if not verify_kernel_tree_hash(contract):
         return False
     for role, meta in registry.items():
         if role not in contract or not isinstance(contract.get(role), dict):

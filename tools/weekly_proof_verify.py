@@ -55,16 +55,19 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
         return False, 'contract_missing_evidence_bundle_schema_sha256'
 
     try:
-        if verify_registry_versions(ADAPTERS, contract) is not True:
-            return False, "registry_contract_version_mismatch"
-        if verify_role_registry_parity(roles(), contract) is not True:
-            return False, "role_contract_action_parity_mismatch"
+        # Fail closed with specific root-cause codes first.
         if verify_contract_binding(contract) is not True:
             return False, "contract_binding_sha256_mismatch"
         if verify_roles_registry_hash(contract) is not True:
             return False, "roles_registry_sha256_mismatch"
         if verify_adapter_registry_hash(contract) is not True:
             return False, "adapter_registry_sha256_mismatch"
+
+        # Then check version parity and role parity.
+        if verify_registry_versions(ADAPTERS, contract) is not True:
+            return False, "adapter_registry_version_mismatch"
+        if verify_role_registry_parity(roles(), contract) is not True:
+            return False, "role_contract_action_parity_mismatch"
     except Exception as e:
         return False, f"registry_contract_check_exception:{type(e).__name__}:{e}"
 
@@ -117,7 +120,7 @@ def verify_weekly_proof_artifact(artifact_path: Path) -> Tuple[bool, str]:
 
         # 1) Verify contract + output schema + adapter_version + adapter_role + action_class invariants
         try:
-            expected = ("external_research" if role == "scout" else "deterministic_local_execution")
+            expected = ("external_research" if role == "scout" else "architecture" if role == "morpheus" else "deterministic_local_execution")
             ok = verify_adapter_output(role, r, expected_action=expected)
         except Exception as e:
             return False, f"contract_check_exception:{role}:{type(e).__name__}"
