@@ -40,6 +40,11 @@ jobs:
           . .venv/bin/activate
           python3 tools/contract_version_bump_check.py
 
+      - name: Run full test suite
+        run: |
+          . .venv/bin/activate
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=./src pytest -q
+
       - name: Run weekly_proof reproducibility tests
         run: |
           . .venv/bin/activate
