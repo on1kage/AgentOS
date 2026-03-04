@@ -2,6 +2,23 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Any, Optional
 import re
+import json
+
+
+def _canonicalize_stdout(stdout: bytes) -> bytes:
+    try:
+        obj = json.loads(stdout.decode("utf-8"))
+    except Exception:
+        return stdout
+    if isinstance(obj, dict):
+        res = obj.get("result")
+        if isinstance(res, dict) and "utc_time" in res:
+            res = dict(res)
+            res.pop("utc_time", None)
+            obj = dict(obj)
+            obj["result"] = res
+            return (canonical_json(obj) + "\n").encode("utf-8")
+    return stdout
 from agentos.canonical import canonical_json, sha256_hex
 from agentos.execution import ExecutionSpec
 from agentos.outcome import ExecutionOutcome, RUN_SUMMARY_SCHEMA_VERSION
@@ -33,8 +50,9 @@ class EvidenceBundle:
         manifest["exec_spec.json"] = sha256_hex(exec_spec_path.read_bytes())
 
         stdout_path = bundle_dir / "stdout.txt"
-        stdout_path.write_bytes(stdout)
-        manifest["stdout.txt"] = sha256_hex(stdout)
+        stdout_norm = _canonicalize_stdout(stdout)
+        stdout_path.write_bytes(stdout_norm)
+        manifest["stdout.txt"] = sha256_hex(stdout_norm)
 
         stderr_path = bundle_dir / "stderr.txt"
         stderr_path.write_bytes(stderr)

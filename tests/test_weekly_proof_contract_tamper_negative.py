@@ -1,6 +1,7 @@
 import json
 import importlib.util
 from pathlib import Path
+from agentos import adapter_role_contract_checker as arc
 
 from agentos.adapter_role_contract_checker import compute_sha256
 
@@ -49,7 +50,7 @@ def test_weekly_proof_fails_closed_on_contract_allowed_actions_tamper(tmp_path: 
     tampered = json.loads(json.dumps(original))
 
     tampered["envoy"]["allowed_actions"] = ["deterministic_local_execution", "evidence_capture", "external_research"]
-    tampered["contract_binding_sha256"] = compute_sha256(_binding_fp(tampered))
+    tampered["contract_binding_sha256"] = compute_sha256(arc._binding_fingerprint(tampered))
 
     try:
         CONTRACT_PATH.write_text(json.dumps(tampered, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n", encoding="utf-8")

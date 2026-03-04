@@ -1,4 +1,5 @@
 import ast
+import json
 import re
 import sys
 from pathlib import Path
@@ -94,8 +95,10 @@ def audit_adapter_import_surface(repo_root: Path) -> Dict[str, object]:
 def main() -> int:
     repo = Path.cwd()
     r = audit_adapter_import_surface(repo)
+    # Always emit a single JSON line for CI/tests.
+    sys.stdout.write(json.dumps(r, sort_keys=True) + "\n")
     if not bool(r.get("ok")):
-        raise SystemExit(2)
+        return 2
     return 0
 
 if __name__ == "__main__":
