@@ -75,6 +75,17 @@ jobs:
         run: |
           diff artifact_hash_run1.txt artifact_hash_run2.txt
 
+      - name: Enforce expected artifact hash (repo-anchored)
+        run: |
+          if [ -f ci/weekly_proof_expected_sha256.txt ]; then
+            if grep -Eq '^[0-9a-f]{64}$' ci/weekly_proof_expected_sha256.txt; then
+              diff ci/weekly_proof_expected_sha256.txt artifact_hash_run1.txt
+            else
+              cat ci/weekly_proof_expected_sha256.txt
+              exit 2
+            fi
+          fi
+
       - name: Fetch previous successful weekly_proof hash (inter-run)
         env:
           WEEKLY_PROOF_WORKFLOW_FILE: weekly_proof_ci.yml
