@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Literal, Optional
 from agentos.canonical import sha256_hex, canonical_json
 
 
-ExecutionKind = Literal["shell", "python", "http"]
+ExecutionKind = Literal["shell"]
 
 
 @dataclass(frozen=True)
