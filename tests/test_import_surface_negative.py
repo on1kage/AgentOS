@@ -31,3 +31,29 @@ def test_import_surface_audit_fails_on_disallowed_import() -> None:
         assert "requests" in dis
     finally:
         TARGET.write_text(original, encoding="utf-8")
+
+
+def test_import_surface_audit_fails_on_dynamic_import() -> None:
+    original = TARGET.read_text(encoding="utf-8")
+    try:
+        TARGET.write_text(original + "\nimport importlib\nimportlib.import_module(\"requests\")\n", encoding="utf-8")
+
+        r = subprocess.run(
+            ["python3", "tools/import_surface_audit.py"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        assert r.returncode == 2
+        out = (r.stdout or "").strip().splitlines()[-1]
+        data = json.loads(out)
+
+        assert data.get("ok") is False
+        files = data.get("files") or {}
+        rel = "tools/scout_run.py"
+        assert rel in files
+        assert files[rel].get("ok") is False
+        assert files[rel].get("dynamic_import_calls") is True
+    finally:
+        TARGET.write_text(original, encoding="utf-8")
