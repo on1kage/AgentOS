@@ -1,30 +1,118 @@
 name: agentos-weekly-proof
-
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   weekly-proof:
-    runs-on: ubuntu-latest
-    env:
-      PPLX_API_KEY: \${{ secrets.PPLX_API_KEY }}
-      PPLX_BASE_URL: \${{ secrets.PPLX_BASE_URL }}
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v3
         with:
-          python-version: '3.11'
-      - name: install
-        run: pip install -r requirements.txt
-      - name: run weekly proof
-        run: PYTHONPATH=src:src/onemind-FSM-Kernel/src python3 tools/weekly_proof_run.py --intent utc_date --roles envoy,scout --require-scout
-      - name: validate evidence hashes
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
+
+      - name: Install dependencies
         run: |
-          set -euo pipefail
-          dirs=(store/weekly_proof/utc_date/*/evidence)
-          if [ "${#dirs[@]}" -eq 0 ]; then exit 1; fi
-          for d in "${dirs[@]}"; do
-            PYTHONPATH=src:src/onemind-FSM-Kernel/src python3 tools/validate_evidence.py --contract ci/evidence_contract.v1.json --evidence-root "$d"
-          done
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Audit adapter import surface (stdlib + agentos + onemind only)
+        run: |
+          . .venv/bin/activate
+          python3 tools/import_surface_audit.py
+
+      - name: "Guardrail: require contract_version bump when contract changes"
+        run: |
+          . .venv/bin/activate
+          python3 tools/contract_version_bump_check.py
+
+      - name: Run full test suite
+        run: |
+          . .venv/bin/activate
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=./src pytest -q
+
+      - name: Run weekly_proof reproducibility tests
+        run: |
+          . .venv/bin/activate
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=./src pytest -q tests/test_weekly_proof_reproducibility.py
+
+      - name: Generate weekly_proof artifact (scout+envoy)
+        run: |
+          . .venv/bin/activate
+          PYTHONPATH=./src python3 tools/weekly_proof_run.py --intent utc_date --roles envoy,scout --require-scout
+
+      - name: Seal artifact hash (run 1)
+        run: |
+          . .venv/bin/activate
+          sha256sum store/weekly_proof/artifacts/utc_date_weekly_proof.json | awk '{print $1}' > artifact_hash_run1.txt
+
+      - name: Regenerate weekly_proof artifact (run 2)
+        run: |
+          . .venv/bin/activate
+          rm -rf store/weekly_proof
+          PYTHONPATH=./src python3 tools/weekly_proof_run.py --intent utc_date --roles envoy,scout --require-scout
+
+      - name: Seal artifact hash (run 2)
+        run: |
+          . .venv/bin/activate
+          sha256sum store/weekly_proof/artifacts/utc_date_weekly_proof.json | awk '{print $1}' > artifact_hash_run2.txt
+
+      - name: Enforce deterministic artifact hash (intra-run)
+        run: |
+          diff artifact_hash_run1.txt artifact_hash_run2.txt
+
+      - name: Enforce expected artifact hash (repo-anchored)
+        run: |
+          if [ -f ci/weekly_proof_expected_sha256.txt ]; then
+            if grep -Eq '^[0-9a-f]{64}$' ci/weekly_proof_expected_sha256.txt; then
+              diff ci/weekly_proof_expected_sha256.txt artifact_hash_run1.txt
+            else
+              cat ci/weekly_proof_expected_sha256.txt
+              exit 2
+            fi
+          fi
+
+      - name: Fetch previous successful weekly_proof hash (inter-run)
+        env:
+          WEEKLY_PROOF_WORKFLOW_FILE: weekly_proof_ci.yml
+          WEEKLY_PROOF_BRANCH: main
+        run: |
+          . .venv/bin/activate
+          python3 tools/ci_fetch_prev_weekly_proof_hash.py > prev_hash.txt
+          if grep -Eq '^[0-9a-f]{64}$' prev_hash.txt; then
+            diff prev_hash.txt artifact_hash_run1.txt
+          else
+            if grep -Eq '^(NO_PREVIOUS_SUCCESS|NO_PREVIOUS_ARTIFACT)$' prev_hash.txt; then
+              exit 0
+            fi
+            cat prev_hash.txt
+            exit 2
+          fi
+
+      - name: Upload weekly_proof hash artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly_proof_hash
+          if-no-files-found: error
+          path: |
+            artifact_hash_run1.txt
+            artifact_hash_run2.txt
+            prev_hash.txt
+
+      - name: Verify weekly_proof artifact against contract + event stream
+        run: |
+          . .venv/bin/activate
+          PYTHONPATH=./src python3 tools/weekly_proof_verify.py
