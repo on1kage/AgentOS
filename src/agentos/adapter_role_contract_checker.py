@@ -227,7 +227,7 @@ def verify_adapter_output(adapter_name: str, outputs: Dict[str, Any], expected_a
     return expected_hash == actual_hash
 
 def verify_role_registry_parity(registry: dict, contract: dict) -> bool:
-    if not isinstance(registry, dict) or not isinstance(contract, dict):
+    if not hasattr(registry, "keys") or not isinstance(contract, dict):
         return False
 
     contract_roles = [

@@ -9,7 +9,7 @@ ADAPTERS = {
         "cmd": ["python3", "-c", "import runpy,sys; sys.path.insert(0,\"src\"); runpy.run_path(\"tools/morpheus_run.py\", run_name=\"__main__\")"],
         "env_allowlist": ["OPENAI_API_KEY"],
         "description": "Architectural reasoning and system-level synthesis",
-        "adapter_version": "1.0.0"
+        "adapter_version": "1.0.1"
     }
 ,
     "envoy": {
