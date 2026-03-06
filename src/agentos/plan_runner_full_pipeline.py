@@ -9,6 +9,9 @@ from agentos.pipeline import Step, PipelineResult, verify_plan
 from agentos.evidence import EvidenceBundle
 from agentos.store_fs import FSStore
 from agentos.roles import roles as role_registry
+from agentos.plan import Plan, PlanStep
+from agentos.plan_runner import PlanRunner
+from agentos.adapter_registry import ADAPTERS
 
 
 
@@ -125,6 +128,53 @@ def _select_candidate(decisions: Dict[str, Any]) -> Tuple[str, str]:
     if tie:
         raise ValueError("intent_compilation_refused:ambiguous_top_candidate")
     return best
+
+def _canonical_exec_payload(*, role: str, action: str, metadata: dict, task_id: str, evidence_root: str, intent_compilation_manifest_sha256: str) -> Dict[str, Any]:
+    adapter = ADAPTERS.get(role)
+    if not isinstance(adapter, dict):
+        raise ValueError(f"unknown_adapter_for_role:{role}")
+
+    cmd = list(adapter.get("cmd") or [])
+    env_allowlist = list(adapter.get("env_allowlist") or [])
+    cwd = str(Path.cwd())
+
+    intent_name = str(metadata.get("intent_name") or "")
+    if role == "morpheus":
+        if action in ("architecture", "verification"):
+            if not intent_name:
+                intent_name = "onemind_stack_descriptions"
+        else:
+            raise ValueError(f"unsupported_execution_mapping:{role}:{action}")
+    elif role == "scout":
+        if action == "external_research":
+            if not intent_name:
+                intent_name = "utc_date"
+        else:
+            raise ValueError(f"unsupported_execution_mapping:{role}:{action}")
+    elif role == "envoy":
+        if action == "deterministic_local_execution":
+            if not intent_name:
+                intent_name = "system_status"
+        else:
+            raise ValueError(f"unsupported_execution_mapping:{role}:{action}")
+    else:
+        raise ValueError(f"unsupported_execution_role:{role}")
+
+    cmd = cmd + [intent_name]
+
+    return {
+        "exec_id": f"exec_{task_id}",
+        "kind": "shell",
+        "cmd_argv": cmd,
+        "cwd": cwd,
+        "env_allowlist": env_allowlist,
+        "timeout_s": 60,
+        "inputs_manifest_sha256": intent_compilation_manifest_sha256,
+        "intent_compilation_manifest_sha256": intent_compilation_manifest_sha256,
+        "paths_allowlist": [cwd],
+        "note": f"run_full_pipeline role={role} action={action} intent={intent_name}",
+    }
+
 
 def run_full_pipeline(payload: dict) -> PipelineResult:
     intent_text = payload.get("intent_text")
@@ -309,5 +359,35 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
     )
     if exit_chk.ok is False:
         return exit_chk
-    return verify_plan(steps, evidence_root=evidence_root)
+
+    verify_res = verify_plan(steps, evidence_root=evidence_root)
+    if verify_res.ok is False:
+        return verify_res
+
+    plan = Plan(
+        plan_id=f"plan_{intent_sha256[:16]}",
+        steps=[
+            PlanStep(
+                step_id=f"step_{intent_sha256[:16]}",
+                role=role,
+                action=action,
+                task_id=f"task_{intent_sha256[:16]}",
+            )
+        ],
+    )
+
+    task_id = plan.steps[0].task_id
+    payloads_by_task_id = {
+        task_id: _canonical_exec_payload(
+            role=role,
+            action=action,
+            metadata=metadata,
+            task_id=task_id,
+            evidence_root=evidence_root,
+            intent_compilation_manifest_sha256=rb["manifest_sha256"],
+        )
+    }
+
+    pr = PlanRunner(store, evidence_root=evidence_root)
+    return pr.run(plan, payloads_by_task_id=payloads_by_task_id)
 

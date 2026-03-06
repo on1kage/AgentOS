@@ -16,7 +16,12 @@ def _build_spec_with_adapter_binding(self, *, task_id: str, role: str, action: s
         expected_cmd = list(adapter.get("cmd") or [])
         expected_env = list(adapter.get("env_allowlist") or [])
 
-        if list(spec.cmd_argv) != expected_cmd:
+        actual_cmd = list(spec.cmd_argv)
+        if len(actual_cmd) != len(expected_cmd) + 1:
+            raise RuntimeError(f"adapter_binding_required:{role}:{action}")
+        if actual_cmd[:len(expected_cmd)] != expected_cmd:
+            raise RuntimeError(f"adapter_binding_required:{role}:{action}")
+        if not isinstance(actual_cmd[-1], str) or not actual_cmd[-1]:
             raise RuntimeError(f"adapter_binding_required:{role}:{action}")
 
         if sorted(list(spec.env_allowlist)) != sorted(expected_env):

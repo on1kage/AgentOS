@@ -56,6 +56,11 @@ class PlanRunResult:
     steps: List[PlanStepResult]
     plan_bundle_dir: str
     plan_manifest_sha256: str
+
+    @property
+    def verification_manifest_sha256(self) -> str:
+        return self.plan_verification_manifest_sha256
+
     def to_obj(self) -> Dict[str, Any]:
         return {
             "ok": self.ok,

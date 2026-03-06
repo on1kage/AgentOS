@@ -15,7 +15,7 @@ def run_dispatched_with_idempotency(self, task_id: str) -> RunSummary:
     derived_state = TaskState(str(snap["state"]))
 
     if not hasattr(self, "_idempotency_store"):
-        self._idempotency_store = IdempotencyStore()
+        self._idempotency_store = IdempotencyStore(root=str(Path(self.store.root) / "idempotency"))
 
     # Build an audit-authoritative key from VERIFIED inputs manifest + created payload.
     try:
