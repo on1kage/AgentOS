@@ -3,6 +3,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
+from agentos.adapter_registry import ADAPTERS
 from agentos.plan import Plan, PlanStep
 from agentos.plan_runner import PlanRunner
 from agentos.store_fs import FSStore
@@ -21,8 +22,6 @@ def test_plan_runner_happy_path_two_steps():
         step_id_2 = f"s_{uuid.uuid4().hex}"
         task_id_1 = f"t_{uuid.uuid4().hex}"
         task_id_2 = f"t_{uuid.uuid4().hex}"
-        exec_id_1 = f"exec_{uuid.uuid4().hex}"
-        exec_id_2 = f"exec_{uuid.uuid4().hex}"
 
         plan = Plan(
             plan_id=plan_id,
@@ -38,31 +37,32 @@ def test_plan_runner_happy_path_two_steps():
         )
 
         ims = _sha256_hex(uuid.uuid4().bytes)
+        cwd = str(Path.cwd())
 
         payloads = {
             task_id_1: {
-                "exec_id": exec_id_1,
+                "exec_id": f"exec_{task_id_1}",
                 "kind": "shell",
-                "cmd_argv": ["python3", "-c", "print('ok1')"],
-                "cwd": tmp,
-                "env_allowlist": [],
-                "timeout_s": 5,
+                "cmd_argv": list(ADAPTERS["morpheus"]["cmd"]) + ["onemind_stack_descriptions"],
+                "cwd": cwd,
+                "env_allowlist": list(ADAPTERS["morpheus"]["env_allowlist"]),
+                "timeout_s": 60,
                 "inputs_manifest_sha256": ims,
-                  "intent_compilation_manifest_sha256": ims,
-                "paths_allowlist": [tmp],
-                "note": "plan step 1",
+                "intent_compilation_manifest_sha256": ims,
+                "paths_allowlist": [cwd],
+                "note": "plan step 1 morpheus",
             },
             task_id_2: {
-                "exec_id": exec_id_2,
+                "exec_id": f"exec_{task_id_2}",
                 "kind": "shell",
-                "cmd_argv": ["python3", "-c", "print('ok2')"],
-                "cwd": tmp,
-                "env_allowlist": [],
-                "timeout_s": 5,
+                "cmd_argv": list(ADAPTERS["envoy"]["cmd"]) + ["system_status"],
+                "cwd": cwd,
+                "env_allowlist": list(ADAPTERS["envoy"]["env_allowlist"]),
+                "timeout_s": 60,
                 "inputs_manifest_sha256": ims,
-                  "intent_compilation_manifest_sha256": ims,
-                "paths_allowlist": [tmp],
-                "note": "plan step 2",
+                "intent_compilation_manifest_sha256": ims,
+                "paths_allowlist": [cwd],
+                "note": "plan step 2 envoy",
             },
         }
 
@@ -74,4 +74,6 @@ def test_plan_runner_happy_path_two_steps():
         assert res.plan_verification_ok is True
         assert len(res.steps) == 2
         assert all(s.run_ok for s in res.steps)
+        assert res.steps[0].role == "morpheus"
+        assert res.steps[1].role == "envoy"
         assert res.plan_manifest_sha256 is not None and len(res.plan_manifest_sha256) == 64

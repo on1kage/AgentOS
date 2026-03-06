@@ -8,7 +8,7 @@ _orig_build_spec = TaskRunner._build_spec
 def _build_spec_with_adapter_binding(self, *, task_id: str, role: str, action: str, payload):
     spec = _orig_build_spec(self, task_id=task_id, role=role, action=action, payload=payload)
 
-    if role in ("morpheus", "scout"):
+    if role in ("morpheus", "scout", "envoy"):
         adapter = ADAPTERS.get(role)
         if not isinstance(adapter, dict):
             raise RuntimeError(f"adapter_binding_required:{role}:{action}")
