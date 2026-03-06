@@ -7,3 +7,4 @@ deterministic, import-time manner so production behavior does not depend on test
 
 # Side-effect import: monkey-patches TaskRunner.run_dispatched for idempotency.
 import agentos.capabilities.patches.runner_idempotency_patch  # noqa: F401
+import agentos.capabilities.patches.runner_adapter_binding_patch  # noqa: F401

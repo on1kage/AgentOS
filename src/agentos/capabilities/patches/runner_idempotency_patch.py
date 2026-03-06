@@ -25,13 +25,12 @@ def run_dispatched_with_idempotency(self, task_id: str) -> RunSummary:
         verified_ims = self._load_verified_inputs_manifest_sha256(task_id)
         created_payload = dict(created_payload)
         created_payload["inputs_manifest_sha256"] = verified_ims
-
-        spec = self._build_spec(task_id=task_id, role=role, action=action, payload=created_payload)
-        key = sha256_hex(spec.to_canonical_json().encode("utf-8"))
     except Exception:
-        # Preserve fail-closed semantics for tasks that were never VERIFIED / not well-formed.
         self.evidence.write_rejection(task_id, reason=f"invalid_state:{derived_state.value}")
         raise RuntimeError(f"invalid_state:{derived_state.value}")
+
+    spec = self._build_spec(task_id=task_id, role=role, action=action, payload=created_payload)
+    key = sha256_hex(spec.to_canonical_json().encode("utf-8"))
 
     # If a record exists for this exact spec key, retries are forbidden (Policy B).
     # This must be checked regardless of derived_state.
