@@ -142,6 +142,72 @@ def verify_task(store: FSStore, task: Task) -> TaskVerifyResult:
             verification_manifest_sha256=bundle['manifest_sha256'],
         )
 
+    icm = task.payload.get('intent_compilation_manifest_sha256')
+    if icm is not None:
+        if not isinstance(icm, str) or not re.fullmatch(r'[0-9a-f]{64}', icm):
+            bad_reason = 'missing_or_invalid_intent_compilation_manifest_sha256'
+            fail_spec = sha256_hex(canonical_json({'task_id': task.task_id, 'attempt': task.attempt}).encode('utf-8'))
+            bundle = EvidenceBundle(root=_evidence_root_for_store(store)).write_verification_bundle(
+                spec_sha256=fail_spec,
+                decisions={'role': task.role, 'action': task.action, 'allow': False, 'reason': bad_reason},
+                reason='task_verification',
+                idempotency_key=None,
+            )
+            decision_ref = store.append_event(
+                task.task_id,
+                'TASK_REJECTED',
+                {
+                    'role': task.role,
+                    'action': task.action,
+                    'reason': bad_reason,
+                    'inputs_manifest_sha256': ims,
+                    'intent_compilation_manifest_sha256': icm,
+                    'verification_spec_sha256': fail_spec,
+                    'attempt': task.attempt,
+                },
+            )
+            return TaskVerifyResult(
+                ok=False,
+                reason=bad_reason,
+                task_id=task.task_id,
+                created_event=created_ref,
+                decision_event=decision_ref,
+                verification_bundle_dir=bundle['bundle_dir'],
+                verification_manifest_sha256=bundle['manifest_sha256'],
+            )
+
+        if icm != ims:
+            bad_reason = 'intent_compilation_manifest_sha256_mismatch'
+            fail_spec = sha256_hex(canonical_json({'task_id': task.task_id, 'attempt': task.attempt}).encode('utf-8'))
+            bundle = EvidenceBundle(root=_evidence_root_for_store(store)).write_verification_bundle(
+                spec_sha256=fail_spec,
+                decisions={'role': task.role, 'action': task.action, 'allow': False, 'reason': bad_reason},
+                reason='task_verification',
+                idempotency_key=None,
+            )
+            decision_ref = store.append_event(
+                task.task_id,
+                'TASK_REJECTED',
+                {
+                    'role': task.role,
+                    'action': task.action,
+                    'reason': bad_reason,
+                    'inputs_manifest_sha256': ims,
+                    'intent_compilation_manifest_sha256': icm,
+                    'verification_spec_sha256': fail_spec,
+                    'attempt': task.attempt,
+                },
+            )
+            return TaskVerifyResult(
+                ok=False,
+                reason=bad_reason,
+                task_id=task.task_id,
+                created_event=created_ref,
+                decision_event=decision_ref,
+                verification_bundle_dir=bundle['bundle_dir'],
+                verification_manifest_sha256=bundle['manifest_sha256'],
+            )
+
     verify_spec = sha256_hex(canonical_json({'inputs_manifest_sha256': ims, 'role': task.role, 'action': task.action, 'adapter_role_contract_sha256': contract_sha256()}).encode('utf-8'))
 
     bundle = EvidenceBundle(root=_evidence_root_for_store(store)).write_verification_bundle(

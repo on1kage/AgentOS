@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, List
+from types import MappingProxyType
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,7 @@ def roles() -> Dict[str, Role]:
     Return the canonical AgentOS role map.
     Deterministic and side-effect free.
     """
-    return {
+    return MappingProxyType({
         "morpheus": Role(
             name="morpheus",
             authority=["architecture", "verification", "protocol_enforcement"],
@@ -38,4 +39,4 @@ def roles() -> Dict[str, Role]:
             authority=["deterministic_local_execution", "evidence_capture"],
             prohibited=["internet_access", "unauthorized_actions", "capability_claims_without_proof"],
         ),
-    }
+    })
