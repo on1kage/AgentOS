@@ -50,6 +50,8 @@ _ALLOWED: Dict[Tuple[TaskState, EventType], TaskState] = {
     (TaskState.RUNNING, EventType.RUN_FAILED): TaskState.FAILED,
 
     (TaskState.COMPLETED, EventType.TASK_EVALUATED): TaskState.EVALUATED,
+
+    (TaskState.FAILED, EventType.TASK_EVALUATED): TaskState.EVALUATED,
 }
 
 _TERMINAL: Tuple[TaskState, ...] = (
