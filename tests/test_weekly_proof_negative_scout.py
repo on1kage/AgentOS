@@ -24,7 +24,7 @@ def test_scout_intent_failure_is_captured():
                 intent_spec_obj=spec_obj,
                 role="scout",
                 store_root=Path("store") / "weekly_proof" / intent_name / "deterministic",
-                cwd=str(Path.cwd()),
+                cwd=".",
                 require_env=True,
             )
     finally:

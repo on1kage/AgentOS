@@ -136,7 +136,7 @@ def _canonical_exec_payload(*, role: str, action: str, metadata: dict, task_id: 
 
     cmd = list(adapter.get("cmd") or [])
     env_allowlist = list(adapter.get("env_allowlist") or [])
-    cwd = str(Path.cwd())
+    cwd = "."
 
     intent_name = str(metadata.get("intent_name") or "")
     if role == "morpheus":
@@ -364,29 +364,62 @@ def run_full_pipeline(payload: dict) -> PipelineResult:
     if verify_res.ok is False:
         return verify_res
 
-    plan = Plan(
-        plan_id=f"plan_{intent_sha256[:16]}",
-        steps=[
-            PlanStep(
-                step_id=f"step_{intent_sha256[:16]}",
-                role=role,
-                action=action,
-                task_id=f"task_{intent_sha256[:16]}",
-            )
-        ],
-    )
-
-    task_id = plan.steps[0].task_id
+    workflow_steps = metadata.get("workflow_steps", [])
+    plan_steps = [
+        PlanStep(
+            step_id=f"step_{intent_sha256[:16]}_0",
+            role=role,
+            action=action,
+            task_id=f"task_{intent_sha256[:16]}_0",
+        )
+    ]
     payloads_by_task_id = {
-        task_id: _canonical_exec_payload(
+        plan_steps[0].task_id: _canonical_exec_payload(
             role=role,
             action=action,
             metadata=metadata,
-            task_id=task_id,
+            task_id=plan_steps[0].task_id,
             evidence_root=evidence_root,
             intent_compilation_manifest_sha256=rb["manifest_sha256"],
         )
     }
+
+    if workflow_steps:
+        if not isinstance(workflow_steps, list):
+            raise ValueError("workflow_steps_not_list")
+        for i, ws in enumerate(workflow_steps, start=1):
+            if not isinstance(ws, dict):
+                raise ValueError("workflow_step_not_dict")
+            ws_role = ws.get("role")
+            ws_action = ws.get("action")
+            if not isinstance(ws_role, str) or not ws_role:
+                raise ValueError("workflow_step_missing_or_invalid_role")
+            if not isinstance(ws_action, str) or not ws_action:
+                raise ValueError("workflow_step_missing_or_invalid_action")
+            ws_metadata = dict(ws)
+            ws_metadata.pop("role", None)
+            ws_metadata.pop("action", None)
+
+            st = PlanStep(
+                step_id=f"step_{intent_sha256[:16]}_{i}",
+                role=ws_role,
+                action=ws_action,
+                task_id=f"task_{intent_sha256[:16]}_{i}",
+            )
+            plan_steps.append(st)
+            payloads_by_task_id[st.task_id] = _canonical_exec_payload(
+                role=ws_role,
+                action=ws_action,
+                metadata=ws_metadata,
+                task_id=st.task_id,
+                evidence_root=evidence_root,
+                intent_compilation_manifest_sha256=rb["manifest_sha256"],
+            )
+
+    plan = Plan(
+        plan_id=f"plan_{intent_sha256[:16]}",
+        steps=plan_steps,
+    )
 
     pr = PlanRunner(store, evidence_root=evidence_root)
     return pr.run(plan, payloads_by_task_id=payloads_by_task_id)

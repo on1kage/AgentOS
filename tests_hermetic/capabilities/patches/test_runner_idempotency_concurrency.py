@@ -3,12 +3,12 @@ from typing import Any, List
 
 import pytest
 
+from agentos.adapter_registry import ADAPTERS
 from agentos.canonical import sha256_hex
 from agentos.runner import TaskRunner
 from agentos.store_fs import FSStore
 from agentos.task import Task, TaskState
 
-# Ensure runtime patch is loaded (import-time side effect)
 import agentos.capabilities  # noqa: F401
 
 
@@ -21,12 +21,12 @@ def test_runner_idempotency_concurrent(tmp_path):
     payload = {
         "exec_id": "exec_idem_concurrent_0001",
         "kind": "shell",
-        "cmd_argv": ["/bin/echo", "ok"],
-        "cwd": str(tmp_path),
-        "env_allowlist": [],
+        "cmd_argv": list(ADAPTERS["envoy"]["cmd"]) + ["system_status"],
+        "cwd": ".",
+        "env_allowlist": list(ADAPTERS["envoy"]["env_allowlist"]),
         "timeout_s": 5,
         "inputs_manifest_sha256": sha256_hex(b"{}"),
-        "paths_allowlist": [str(tmp_path), "/usr/bin/echo"],
+        "paths_allowlist": ["."],
         "note": "idempotent concurrent test",
     }
 
@@ -39,7 +39,6 @@ def test_runner_idempotency_concurrent(tmp_path):
         attempt=0,
     )
 
-    # Verify and dispatch
     from agentos.pipeline import verify_task
     from agentos.router import ExecutionRouter
 
@@ -76,11 +75,9 @@ def test_runner_idempotency_concurrent(tmp_path):
     th1.join()
     th2.join()
 
-    # Exactly one should succeed.
     assert len(results) == 1
     assert results[0].ok
 
-    # Exactly one should fail, and it must be for idempotency reasons.
     assert len(errors) == 1
     msg = errors[0]
     assert ("Idempotent lock held" in msg) or ("Duplicate execution prevented" in msg)

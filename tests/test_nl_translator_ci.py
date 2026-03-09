@@ -1,8 +1,10 @@
 import os
 from agentos.plan_runner_full_pipeline import run_full_pipeline
 
-def test_planspec_ci_success():
+def test_planspec_ci_success(tmp_path):
+    old_store = os.environ.get("AGENTOS_STORE_ROOT")
     os.environ["AGENTOS_INTENT_SOURCE"] = "planspec_v1"
+    os.environ["AGENTOS_STORE_ROOT"] = str(tmp_path / "store")
     try:
         payload = {
             "intent_text": "ci test intent",
@@ -10,12 +12,19 @@ def test_planspec_ci_success():
         }
         res = run_full_pipeline(payload)
         assert res.ok is True
-        assert isinstance(res.decisions, list)
+        assert hasattr(res, "steps")
+        assert len(res.steps) == 1
     finally:
         os.environ.pop("AGENTOS_INTENT_SOURCE", None)
+        if old_store is None:
+            os.environ.pop("AGENTOS_STORE_ROOT", None)
+        else:
+            os.environ["AGENTOS_STORE_ROOT"] = old_store
 
-def test_planspec_ci_failure_missing_planspec():
+def test_planspec_ci_failure_missing_planspec(tmp_path):
+    old_store = os.environ.get("AGENTOS_STORE_ROOT")
     os.environ["AGENTOS_INTENT_SOURCE"] = "planspec_v1"
+    os.environ["AGENTOS_STORE_ROOT"] = str(tmp_path / "store")
     try:
         payload = {"intent_text": "ci test intent"}
         res = run_full_pipeline(payload)
@@ -24,3 +33,7 @@ def test_planspec_ci_failure_missing_planspec():
         assert res.decisions[0]["reason"] == "planspec_invalid:not_a_dict"
     finally:
         os.environ.pop("AGENTOS_INTENT_SOURCE", None)
+        if old_store is None:
+            os.environ.pop("AGENTOS_STORE_ROOT", None)
+        else:
+            os.environ["AGENTOS_STORE_ROOT"] = old_store

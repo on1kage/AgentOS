@@ -24,7 +24,7 @@ def test_weekly_proof_inputs_manifest_binds_intent_spec():
         task_id="weekly_envoy",
         cmd_argv=["echo", "ok"],
         env_allowlist=[],
-        cwd=str(Path.cwd()),
+        cwd=".",
         intent_name="utc_date",
         intent_spec_obj=ispec,
     )
@@ -50,7 +50,7 @@ def test_weekly_proof_manifest_changes_if_spec_changes():
         task_id="weekly_envoy",
         cmd_argv=["echo", "ok"],
         env_allowlist=[],
-        cwd=str(Path.cwd()),
+        cwd=".",
         intent_name="utc_date",
         intent_spec_obj=ispec,
     )
@@ -59,7 +59,7 @@ def test_weekly_proof_manifest_changes_if_spec_changes():
         task_id="weekly_envoy",
         cmd_argv=["echo", "ok"],
         env_allowlist=[],
-        cwd=str(Path.cwd()),
+        cwd=".",
         intent_name="utc_date",
         intent_spec_obj=ispec2,
     )

@@ -1,6 +1,7 @@
 import tempfile
 import pytest
 
+from agentos.adapter_registry import ADAPTERS
 from agentos.store_fs import FSStore
 from agentos.runner import TaskRunner
 
@@ -19,9 +20,9 @@ def test_runner_rejects_unsupported_execution_kind_and_emits_no_run_started():
                 "payload": {
                     "exec_id": "exec-1",
                     "kind": "python",
-                    "cmd_argv": ["python3", "-c", "print('x')"],
+                    "cmd_argv": list(ADAPTERS["envoy"]["cmd"]) + ["system_status"],
                     "cwd": tmp,
-                    "env_allowlist": [],
+                    "env_allowlist": list(ADAPTERS["envoy"]["env_allowlist"]),
                     "timeout_s": 1,
                     "inputs_manifest_sha256": "b" * 64,
                     "paths_allowlist": [tmp],

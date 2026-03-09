@@ -314,7 +314,7 @@ def main(*, intent_name: str, roles_csv: str, require_scout: bool) -> int:
             shutil.rmtree(store_root)
         store_root.mkdir(parents=True, exist_ok=True)
 
-        cwd = str(Path.cwd())
+        cwd = "."
         results: Dict[str, Any] = {}
 
         for role in roles:

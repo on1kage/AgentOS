@@ -37,7 +37,7 @@ def test_plan_runner_happy_path_two_steps():
         )
 
         ims = _sha256_hex(uuid.uuid4().bytes)
-        cwd = str(Path.cwd())
+        cwd = "."
 
         payloads = {
             task_id_1: {

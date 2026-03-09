@@ -1,5 +1,6 @@
 import tempfile
 
+from agentos.adapter_registry import ADAPTERS
 from agentos.store_fs import FSStore
 from agentos.runner import TaskRunner
 
@@ -19,12 +20,12 @@ def test_run_started_spec_sha256_matches_reconstructed_spec():
                 "payload": {
                     "exec_id": "exec-1",
                     "kind": "shell",
-                    "cmd_argv": ["python3", "-c", "print('ok')"],
-                    "cwd": tmp,
-                    "env_allowlist": [],
+                    "cmd_argv": list(ADAPTERS["envoy"]["cmd"]) + ["system_status"],
+                    "cwd": ".",
+                    "env_allowlist": list(ADAPTERS["envoy"]["env_allowlist"]),
                     "timeout_s": 5,
                     "inputs_manifest_sha256": "a" * 64,
-                    "paths_allowlist": [tmp],
+                    "paths_allowlist": ["."],
                     "note": None,
                 },
                 "attempt": 0,
@@ -67,4 +68,3 @@ def test_run_started_spec_sha256_matches_reconstructed_spec():
         assert len(rs) == 1
         body = rs[0].get("body") or {}
         assert body.get("spec_sha256") == spec.spec_sha256()
-    

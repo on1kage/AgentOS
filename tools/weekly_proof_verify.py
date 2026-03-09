@@ -7,6 +7,11 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
 from agentos.adapter_role_contract_checker import verify_adapter_output, load_contract, verify_registry_versions, verify_role_registry_parity, verify_contract_binding, verify_roles_registry_hash, verify_adapter_registry_hash
 from agentos.adapter_registry import ADAPTERS
 from agentos.roles import roles

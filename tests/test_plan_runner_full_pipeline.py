@@ -2,8 +2,10 @@ import os
 import pytest
 from agentos.plan_runner_full_pipeline import run_full_pipeline
 
-def test_full_pipeline_success():
+def test_full_pipeline_success(tmp_path):
+    old_store = os.environ.get("AGENTOS_STORE_ROOT")
     os.environ["AGENTOS_INTENT_SOURCE"] = "planspec_v1"
+    os.environ["AGENTOS_STORE_ROOT"] = str(tmp_path / "store")
     try:
         payload = {
             "intent_text": "search for papers",
@@ -16,18 +18,31 @@ def test_full_pipeline_success():
         assert getattr(result, "ok", None) is True
     finally:
         os.environ.pop("AGENTOS_INTENT_SOURCE", None)
+        if old_store is None:
+            os.environ.pop("AGENTOS_STORE_ROOT", None)
+        else:
+            os.environ["AGENTOS_STORE_ROOT"] = old_store
 
-def test_full_pipeline_blocks_legacy_intake_when_intent_source_unset():
-    payload = {"intent_text": "do something unknown"}
-    result = run_full_pipeline(payload)
-    assert result is not None
-    assert getattr(result, "ok", None) is False
-    assert result.decisions[0]["stage"] == "intent_source_gate"
-    assert result.decisions[0]["reason"] == "legacy_path_blocked:intent_source_unset"
-    assert getattr(result, "verification_manifest_sha256", None)
+def test_full_pipeline_blocks_legacy_intake_when_intent_source_unset(tmp_path):
+    old_store = os.environ.get("AGENTOS_STORE_ROOT")
+    os.environ["AGENTOS_STORE_ROOT"] = str(tmp_path / "store")
+    try:
+        payload = {"intent_text": "do something unknown"}
+        result = run_full_pipeline(payload)
+        assert result is not None
+        assert getattr(result, "ok", None) is False
+        assert result.decisions[0]["stage"] == "intent_source_gate"
+        assert result.decisions[0]["reason"] == "legacy_path_blocked:intent_source_unset"
+        assert getattr(result, "verification_manifest_sha256", None)
+    finally:
+        if old_store is None:
+            os.environ.pop("AGENTOS_STORE_ROOT", None)
+        else:
+            os.environ["AGENTOS_STORE_ROOT"] = old_store
 
-def test_planspec_success_authorized(monkeypatch):
+def test_planspec_success_authorized(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENTOS_INTENT_SOURCE", "planspec_v1")
+    monkeypatch.setenv("AGENTOS_STORE_ROOT", str(tmp_path / "store"))
     payload = {
         "intent_text": "any text (ignored by planspec path)",
         "plan_spec": {"role": "morpheus", "action": "verification", "metadata": {}},
@@ -41,16 +56,18 @@ def test_planspec_success_authorized(monkeypatch):
     assert ci["selected"]["action"] == "verification"
     assert getattr(result, "verification_manifest_sha256", None)
 
-def test_planspec_refusal_missing_planspec(monkeypatch):
+def test_planspec_refusal_missing_planspec(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENTOS_INTENT_SOURCE", "planspec_v1")
+    monkeypatch.setenv("AGENTOS_STORE_ROOT", str(tmp_path / "store"))
     payload = {"intent_text": "x"}
     result = run_full_pipeline(payload)
     assert result is not None
     assert getattr(result, "ok", None) is False
     assert getattr(result, "verification_manifest_sha256", None)
 
-def test_planspec_refusal_unknown_keys(monkeypatch):
+def test_planspec_refusal_unknown_keys(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENTOS_INTENT_SOURCE", "planspec_v1")
+    monkeypatch.setenv("AGENTOS_STORE_ROOT", str(tmp_path / "store"))
     payload = {
         "intent_text": "x",
         "plan_spec": {"role": "morpheus", "action": "verification", "wat": 1},
@@ -60,8 +77,9 @@ def test_planspec_refusal_unknown_keys(monkeypatch):
     assert getattr(result, "ok", None) is False
     assert getattr(result, "verification_manifest_sha256", None)
 
-def test_planspec_refusal_invalid_metadata(monkeypatch):
+def test_planspec_refusal_invalid_metadata(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENTOS_INTENT_SOURCE", "planspec_v1")
+    monkeypatch.setenv("AGENTOS_STORE_ROOT", str(tmp_path / "store"))
     payload = {
         "intent_text": "x",
         "plan_spec": {"role": "morpheus", "action": "verification", "metadata": "nope"},
